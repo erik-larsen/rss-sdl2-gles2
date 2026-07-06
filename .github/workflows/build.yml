@@ -1,0 +1,117 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---- Native builds: Linux, macOS, Windows (MSYS2) ----
+  native:
+    name: native (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install deps (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libsdl2-dev libopenal-dev libxnvctrl0
+
+      - name: Install deps (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install sdl2 cmake openal-soft
+
+      - name: Install deps (Windows / MSYS2)
+        if: matrix.os == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-openal
+            make
+
+      - name: Build all savers (native)
+        run: make native
+
+      - name: Upload build summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}-logs
+          path: logs/
+          if-no-files-found: ignore
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}-bin
+          path: savers/*/bin-*/
+          if-no-files-found: ignore
+
+  # ---- WebAssembly build via Emscripten ----
+  web:
+    name: web (emscripten)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+
+      - name: Install host deps (cmake for gl4es)
+        run: sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Build all savers (browser)
+        run: make browser
+
+      - name: Assemble web gallery
+        run: ./scripts/deploy-web.sh
+
+      - name: Upload web gallery
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-gallery
+          path: web/
+
+  # ---- Deploy the web gallery to GitHub Pages (main only) ----
+  pages:
+    name: deploy gallery to Pages
+    needs: web
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-gallery
+          path: web
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deploy
+        uses: actions/deploy-pages@v4
