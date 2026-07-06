@@ -35,17 +35,20 @@ native: $(NATIVE_LIB)
 
 browser: $(WEB_LIB)
 
+
+# Build via `cmake --build` rather than `make -C`: cmake's default generator
+# is Ninja on MSYS2 (no Makefile in the build dir), Unix Makefiles elsewhere.
 $(NATIVE_LIB):
 	mkdir -p build-native
 	cd build-native && cmake .. $(NATIVE_CFG)
-	$(MAKE) -C build-native -j
+	cmake --build build-native -j
 	cp lib/libGL.a $(NATIVE_LIB)
 	@echo "BUILT: gl4es $(NATIVE_LIB)"
 
 $(WEB_LIB):
 	mkdir -p build-web
 	cd build-web && emcmake cmake .. $(WEB_CFG)
-	$(MAKE) -C build-web -j
+	cmake --build build-web -j
 	cp lib/libGL.a $(WEB_LIB)
 	@echo "BUILT: gl4es $(WEB_LIB)"
 
