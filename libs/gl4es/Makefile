@@ -29,6 +29,14 @@ WEB_CFG    = -DNOX11=ON -DNOEGL=ON -DSTATICLIB=ON \
 NATIVE_LIB = lib/libGL-native.a
 WEB_LIB    = lib/libGL-web.a
 
+# gl4es' CMake names the library target OPENGL32 on win32, GL elsewhere
+# (the emscripten build is never win32, so web is always libGL.a).
+ifeq ($(OS),win)
+BUILT_NATIVE_LIB = lib/libOPENGL32.a
+else
+BUILT_NATIVE_LIB = lib/libGL.a
+endif
+
 all: native
 
 native: $(NATIVE_LIB)
@@ -36,23 +44,26 @@ native: $(NATIVE_LIB)
 browser: $(WEB_LIB)
 
 
-# Build via `cmake --build` rather than `make -C`: cmake's default generator
-# is Ninja on MSYS2 (no Makefile in the build dir), Unix Makefiles elsewhere.
+# Build via `cd <dir> && cmake --build .` rather than `make -C`: cmake's
+# default generator is Ninja on MSYS2 (no Makefile in the build dir), and the
+# `cd ... &&` forces a shell so PATH lookup skips emsdk's cmake/ *directory*
+# (a bare `cmake --build ...` recipe line is exec'd directly by make, which
+# resolves that directory first and dies with "Permission denied").
 $(NATIVE_LIB):
 	mkdir -p build-native
 	cd build-native && cmake .. $(NATIVE_CFG)
-	cmake --build build-native -j
-	cp lib/libGL.a $(NATIVE_LIB)
+	cd build-native && cmake --build . -j
+	cp $(BUILT_NATIVE_LIB) $(NATIVE_LIB)
 	@echo "BUILT: gl4es $(NATIVE_LIB)"
 
 $(WEB_LIB):
 	mkdir -p build-web
 	cd build-web && emcmake cmake .. $(WEB_CFG)
-	cmake --build build-web -j
+	cd build-web && cmake --build . -j
 	cp lib/libGL.a $(WEB_LIB)
 	@echo "BUILT: gl4es $(WEB_LIB)"
 
 clean:
-	rm -rf build-native build-web lib/libGL.a $(NATIVE_LIB) $(WEB_LIB)
+	rm -rf build-native build-web lib/libGL.a lib/libOPENGL32.a $(NATIVE_LIB) $(WEB_LIB)
 
 .PHONY: all native browser clean
