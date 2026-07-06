@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Really Slick Screensaver</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      background: #000; color: #ccc;
+      font-family: -apple-system, system-ui, sans-serif;
+    }
+    #canvas {
+      display: block; width: 100vw; height: 100vh;
+      border: 0; outline: none; background: #000;
+    }
+    #status {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      font-size: 14px; letter-spacing: 0.1em; color: #888;
+      pointer-events: none; transition: opacity 0.6s; text-align: center;
+    }
+    #status.hidden { opacity: 0; }
+    #bar {
+      width: 220px; height: 2px; margin: 14px auto 0; background: #222;
+      border-radius: 2px; overflow: hidden;
+    }
+    #bar > div { height: 100%; width: 0; background: #6cf; transition: width 0.2s; }
+    #hint {
+      position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
+      font-size: 11px; color: #444; pointer-events: none;
+      transition: opacity 1s; opacity: 0.7;
+    }
+    #hint.hidden { opacity: 0; }
+
+    /* Controls legend HUD */
+    #hud {
+      position: fixed; top: 14px; right: 14px; z-index: 10;
+      background: rgba(16,16,24,0.82); border: 1px solid #2a2a38;
+      border-radius: 10px; padding: 12px 14px 12px 14px;
+      font-size: 12px; color: #d6d6e2; min-width: 150px;
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      transition: opacity 0.4s, transform 0.4s;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+    }
+    #hud.hidden { opacity: 0; transform: translateY(-6px); pointer-events: none; }
+    #hud h2 {
+      margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #9a9ab0;
+    }
+    #hud .row { display: flex; justify-content: space-between; gap: 16px; margin: 4px 0; line-height: 1.5; }
+    #hud .row .act { color: #aab; }
+    #hud kbd {
+      font-family: inherit; font-size: 11px; color: #cdf;
+      background: #20202c; border: 1px solid #34344a; border-bottom-width: 2px;
+      border-radius: 4px; padding: 1px 6px; min-width: 14px; text-align: center;
+      display: inline-block;
+    }
+    #hud .foot { margin-top: 9px; padding-top: 8px; border-top: 1px solid #2a2a38;
+      font-size: 10px; color: #6a6a80; }
+    /* small floating "?" button to reopen the HUD once hidden */
+    #hudtoggle {
+      position: fixed; top: 14px; right: 14px; z-index: 9;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(16,16,24,0.7); border: 1px solid #2a2a38; color: #9a9ab0;
+      font-size: 13px; line-height: 24px; text-align: center; cursor: pointer;
+      transition: opacity 0.4s, background 0.15s; opacity: 0;
+    }
+    #hudtoggle.show { opacity: 0.6; }
+    #hudtoggle.show:hover { opacity: 1; background: rgba(30,30,44,0.9); }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="status">loading<div id="bar"><div id="barfill"></div></div></div>
+
+  <div id="hud">
+    <h2 id="hudtitle">Controls</h2>
+    <div class="row"><span class="act">Toggle stats</span> <kbd>F1</kbd></div>
+    <div class="row" id="fsrow" style="cursor:pointer"><span class="act">Fullscreen</span> <kbd>click</kbd></div>
+    <div class="row"><span class="act">Show / hide this</span> <kbd>H</kbd></div>
+    <div class="row"><span class="act">Exit fullscreen</span> <kbd>Esc</kbd></div>
+    <div class="foot">click canvas to capture input</div>
+  </div>
+  <div id="hudtoggle" title="Show controls (H)">?</div>
+  <div id="hint">press <b>&nbsp;H&nbsp;</b> for controls</div>
+
+  <script type="text/javascript">
+    var statusEl = document.getElementById('status');
+    var barEl = document.getElementById('barfill');
+    var hintEl = document.getElementById('hint');
+    var hideTimer = null;
+
+    var Module = {
+      canvas: (function () {
+        var c = document.getElementById('canvas');
+        c.addEventListener('webglcontextlost', function (e) {
+          alert('WebGL context lost. Please reload.'); e.preventDefault();
+        }, false);
+        return c;
+      })(),
+      setStatus: function (text) {
+        if (!text) {
+          statusEl.classList.add('hidden');
+          if (!hideTimer) hideTimer = setTimeout(function () {
+            hintEl.classList.add('hidden');
+            if (window.rssHud) window.rssHud.autohide();
+          }, 4000);
+          return;
+        }
+        var m = text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+        if (m) {
+          barEl.style.width = (parseInt(m[2]) / parseInt(m[4]) * 100) + '%';
+          statusEl.firstChild.textContent = m[1].trim() || 'loading';
+        } else {
+          statusEl.firstChild.textContent = text;
+          if (!text.length) barEl.style.width = '100%';
+        }
+      },
+      totalDependencies: 0,
+      monitorRunDependencies: function (left) {
+        this.totalDependencies = Math.max(this.totalDependencies, left);
+        Module.setStatus(left
+          ? 'preparing (' + (this.totalDependencies - left) + '/' + this.totalDependencies + ')'
+          : '');
+      }
+    };
+    Module.setStatus('downloading');
+    window.onerror = function () { Module.setStatus('exception — see console'); };
+
+    // gl4es tuning: prefer VBOs, batch immediate-mode geometry.
+    Module.preRun = Module.preRun || [];
+    Module.preRun.push(function () {
+      if (typeof ENV !== 'undefined') {
+        ENV.LIBGL_USEVBO = '1';
+        ENV.LIBGL_BATCH = '1';
+      }
+    });
+
+    // ---- Controls legend HUD ----
+    (function () {
+      var hud = document.getElementById('hud');
+      var toggle = document.getElementById('hudtoggle');
+      var titleEl = document.getElementById('hudtitle');
+
+      // Title the HUD with the saver's name, taken from the page's own
+      // filename in the URL (e.g. .../flux/flux.html -> "flux"). This is
+      // available immediately and doesn't depend on emscripten's async script
+      // tag having been parsed yet. Falls back to "Controls".
+      var name = '';
+      try {
+        var m = (location.pathname || '').match(/([^\/]+?)(?:\.html?)?$/i);
+        if (m && m[1] && m[1].toLowerCase() !== 'index') name = m[1];
+      } catch (e) {}
+      if (name) {
+        titleEl.textContent = name.charAt(0).toUpperCase() + name.slice(1) + ' \u2022 Controls';
+        document.title = name.charAt(0).toUpperCase() + name.slice(1);
+      }
+
+      var visible = true;
+      function show() { visible = true; hud.classList.remove('hidden'); toggle.classList.remove('show'); }
+      function hide() { visible = false; hud.classList.add('hidden'); toggle.classList.add('show'); }
+
+      window.rssHud = {
+        // Called ~4s after load: fade the panel down to just the "?" button,
+        // so the saver is unobstructed but the legend stays one keypress away.
+        autohide: function () { if (visible) hide(); }
+      };
+
+      // 'H' or '?' toggles the legend. Handle it here in the page so it does
+      // NOT reach the wasm canvas (the savers don't use these keys anyway).
+      window.addEventListener('keydown', function (e) {
+        if (e.key === 'h' || e.key === 'H' || e.key === '?') {
+          visible ? hide() : show();
+          e.preventDefault();
+        }
+      }, true);
+
+      toggle.addEventListener('click', show);
+
+      // Fullscreen: on web, fullscreen is the browser's job, not a saver key.
+      var fsrow = document.getElementById('fsrow');
+      if (fsrow) fsrow.addEventListener('click', function () {
+        var c = document.getElementById('canvas');
+        var req = c.requestFullscreen || c.webkitRequestFullscreen || c.msRequestFullscreen;
+        if (req) req.call(c);
+      });
+    })();
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

@@ -1,0 +1,16 @@
+mkdir -p bin-mac-arm64
+echo "*" > bin-mac-arm64/.gitignore
+c++  -std=gnu++14 -DNDEBUG -O2 -Wno-deprecated-declarations -Wno-writable-strings -Wno-write-strings -Wno-parentheses -Wno-comment -Wno-narrowing -Wno-unused-value -Wno-unused-variable -Wno-char-subscripts -Wno-deprecated-non-prototype -Wno-unused-command-line-argument  -DRS_XSCREENSAVER  -I../../libs/librs/src -I../../libs/gl4es/include -DGL_GLEXT_PROTOTYPES -I../../libs/glues/include -I../../libs/rsmath/src -I../../include/shim `sdl2-config --cflags` helios.cpp -c -o bin-mac-arm64/helios.o
+helios.cpp:46:10: warning: non-portable path to file '<Rgbhsl/Rgbhsl.h>'; specified path differs in case from file name on disk [-Wnonportable-include-path]
+   46 | #include <rgbhsl/rgbhsl.h>
+      |          ^~~~~~~~~~~~~~~~~
+      |          <Rgbhsl/Rgbhsl.h>
+1 warning generated.
+c++  -std=gnu++14 -DNDEBUG -O2 -Wno-deprecated-declarations -Wno-writable-strings -Wno-write-strings -Wno-parentheses -Wno-comment -Wno-narrowing -Wno-unused-value -Wno-unused-variable -Wno-char-subscripts -Wno-deprecated-non-prototype -Wno-unused-command-line-argument  -DRS_XSCREENSAVER  -I../../libs/librs/src -I../../libs/gl4es/include -DGL_GLEXT_PROTOTYPES -I../../libs/glues/include -I../../libs/rsmath/src -I../../include/shim `sdl2-config --cflags` rss_help.cpp -c -o bin-mac-arm64/rss_help.o
+c++  -std=gnu++17 -DNDEBUG -O2 ./bin-mac-arm64/helios.o ./bin-mac-arm64/rss_help.o \
+		../../libs/librs/./bin-mac-arm64/librs.a ../../libs/rsmath/./bin-mac-arm64/librsmath.a ../../libs/glues/./bin-mac-arm64/libglues.a ../../libs/gl4es/lib/libGL-native.a \
+		`sdl2-config --libs` -L../../libs/libgles/lib-mac -l GLESv2 -l EGL -Wl,-rpath,../../libs/libgles/lib-mac \
+		 -lm  -o bin-mac-arm64/helios
+for dylib in libGLESv2.dylib libEGL.dylib; do install_name_tool -change ./$dylib @rpath/$dylib bin-mac-arm64/helios; done;
+
+BUILT: bin-mac-arm64/helios

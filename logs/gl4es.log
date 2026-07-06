@@ -1,0 +1,13 @@
+mkdir -p build-native
+cd build-native && cmake .. -DNOX11=ON -DNOEGL=ON -DSTATICLIB=ON -DNO_LOADER=ON -DNO_INIT_CONSTRUCTOR=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_FLAGS="-Wno-macro-redefined -Wno-dangling-else -Wno-logical-not-parentheses -Wno-parentheses"
+-- Not on Linux: building without GLX support.
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Users/larsens/Github/rss-port/libs/gl4es/build-native
+/Library/Developer/CommandLineTools/usr/bin/make -C build-native -j
+[  2%] Building C object src/CMakeFiles/GL.dir/gl/directstate.c.o
+[  2%] Building C object src/CMakeFiles/GL.dir/gl/build_info.c.o
+[  4%] Linking C static library /Users/larsens/Github/rss-port/libs/gl4es/lib/libGL.a
+[100%] Built target GL
+cp lib/libGL.a lib/libGL-native.a
+BUILT: gl4es lib/libGL-native.a
