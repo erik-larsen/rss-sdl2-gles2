@@ -304,3 +304,31 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
        -Wnonportable-include-path warning in helios; Linux/CI uses the shim,
        warning-free. The shim's include guard (RGBHSL_SHIM_H) protects against
        self-inclusion if include-path order ever puts SHIM_INC first.
+
+## Decisions log (CI bring-up: runs #1-#4)
+
+40. **First real CI runs surfaced platform quirks** (Linux/macOS/web/Pages all
+    green as of run #4; Windows handed off to a local MSYS2 build):
+    a. **MSYS2 cmake defaults to the Ninja generator**, so the gl4es wrapper
+       drives builds with `cd <dir> && cmake --build . -j` instead of
+       `make -C <dir>` (works for any generator).
+    b. **The `cd ... &&` prefix is load-bearing**: a bare `cmake --build X`
+       recipe line is exec'd by make without a shell, and PATH resolution then
+       hits emsdk's `upstream/emscripten/cmake/` *directory* -> "Permission
+       denied" on the web build. A shell (forced by the `&&`) skips
+       directories during PATH search.
+    c. **gl4es's CMake names the lib target OPENGL32 on win32** ->
+       lib/libOPENGL32.a; the wrapper cp's BUILT_NATIVE_LIB (OS-conditional
+       via platform.mk) to libGL-native.a.
+    d. **gl4es's Mesa-derived GL/gl.h includes GL/mesa_wgl.h on MinGW** but
+       gl4es doesn't ship it; a stub is vendored at
+       libs/gl4es/include/GL/mesa_wgl.h (wgl comes from windows.h; nothing
+       here calls wgl -- contexts are SDL2/ANGLE).
+    Windows state after these fixes: gl4es compiles and archives cleanly
+    (mingw-gcc, 70/70 files); next untested layers are glues/rsmath/librs
+    compilation and final linking against MSYS2 SDL2, optional OpenAL
+    (pkg-config-gated), and ANGLE lib-win (.lib COFF import archives, which
+    MinGW ld accepts). Known-cosmetic: mingw-gcc spams "'thread' attribute
+    directive ignored" for gl4es and notes that the clang-only -Wno- flags in
+    GL4ES_QUIET are unrecognized (~425 warnings on the first target); gate
+    GL4ES_QUIET by compiler if it gets annoying.
