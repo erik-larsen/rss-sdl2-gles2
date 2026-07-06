@@ -1,4 +1,4 @@
-# rss-port — Really Slick Screensavers on SDL2 / OpenGL ES2
+# rss-sdl2-gles2 — Really Slick Screensavers on SDL2 / OpenGL ES2
 
 A port of [Terence M. Welsh's Really Slick Screensavers](https://www.reallyslick.com)
 ([upstream repo](https://github.com/reallyslickscreensavers/reallyslickscreensavers))

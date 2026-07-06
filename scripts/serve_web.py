@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""serve_web.py - tiny static server for the rss-port web gallery.
+"""serve_web.py - tiny static server for the rss-sdl2-gles2 web gallery.
 
 Serves the web/ directory with the right MIME type for .wasm and with
 COOP/COEP headers enabled. Most savers run from any static host, but serving
