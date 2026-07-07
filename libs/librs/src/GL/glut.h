@@ -91,6 +91,11 @@ static inline void glutInit(int* argcp, char** argv) {
 #ifndef __EMSCRIPTEN__
     /* Use ANGLE's real GLES2 driver on desktop (see librs/rsSDLSaver.cpp). */
     SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+#ifdef __APPLE__
+    /* ANGLE Metal backend: its desktop-GL default GPU-syncs on every
+     * client-array draw (see librs/rsSDLSaver.cpp) */
+    setenv("ANGLE_DEFAULT_PLATFORM", "metal", 0);
+#endif
 #endif
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
 }
@@ -118,16 +123,22 @@ static inline int glutCreateWindow(const char* title) {
     if (rss_glut_dmode & GLUT_STENCIL)
         SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
+    Uint32 rss_glut_wflags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+#ifndef __EMSCRIPTEN__
+    /* Retina/HiDPI: match librs -- surface is pixel-scale, report pixels
+     * via SDL_GL_GetDrawableSize (see rsSDLSaver.cpp) */
+    rss_glut_wflags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
     rss_glut_window = SDL_CreateWindow(title,
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         rss_glut_w, rss_glut_h,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+        rss_glut_wflags);
     if (!rss_glut_window && (rss_glut_dmode & GLUT_DEPTH)) {
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);  /* retry shallower */
         rss_glut_window = SDL_CreateWindow(title,
             SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             rss_glut_w, rss_glut_h,
-            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+            rss_glut_wflags);
     }
     rss_glut_context = SDL_GL_CreateContext(rss_glut_window);
     SDL_GL_MakeCurrent(rss_glut_window, rss_glut_context);
@@ -174,8 +185,8 @@ static inline void rss_glut_pump(void) {
             rss_glut_running = 0;
         else if (ev.type == SDL_WINDOWEVENT &&
                  ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-            rss_glut_w = ev.window.data1;
-            rss_glut_h = ev.window.data2;
+            /* event data1/data2 are points; the GL surface is in pixels */
+            SDL_GL_GetDrawableSize(rss_glut_window, &rss_glut_w, &rss_glut_h);
             if (rss_glut_reshape) rss_glut_reshape(rss_glut_w, rss_glut_h);
         }
     }

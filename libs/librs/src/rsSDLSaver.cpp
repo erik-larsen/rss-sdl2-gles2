@@ -66,6 +66,31 @@ extern "C" void rsSwapBuffers(void)
     gl4es_pre_swap();
     SDL_GL_SwapWindow(g_window);
     gl4es_post_swap();
+
+    // RSS_FPS_LOG=1: report frame pacing on stderr every ~2s (min/avg/max ms)
+    static int log_fps = -1;
+    if (log_fps == -1) log_fps = getenv("RSS_FPS_LOG") ? 1 : 0;
+    if (log_fps) {
+        static Uint64 prev = 0, t0 = 0;
+        static double worst = 0, best = 1e9;
+        static int frames = 0;
+        Uint64 now = SDL_GetPerformanceCounter();
+        if (prev) {
+            double ms = (double)(now - prev) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+            if (ms > worst) worst = ms;
+            if (ms < best) best = ms;
+            frames++;
+            double elapsed = (double)(now - t0) / (double)SDL_GetPerformanceFrequency();
+            if (elapsed >= 2.0) {
+                fprintf(stderr, "[fps] %.1f fps  frame ms min/avg/max %.1f/%.1f/%.1f\n",
+                        frames / elapsed, best, elapsed * 1000.0 / frames, worst);
+                frames = 0; worst = 0; best = 1e9; t0 = now;
+            }
+        } else {
+            t0 = now;
+        }
+        prev = now;
+    }
 }
 
 static void* get_proc_address(const char* name)
@@ -164,8 +189,8 @@ static void handle_events(void)
             break;
         case SDL_WINDOWEVENT:
             if (ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-                g_width = ev.window.data1;
-                g_height = ev.window.data2;
+                // event data1/data2 are points; the GL surface is in pixels
+                SDL_GL_GetDrawableSize(g_window, &g_width, &g_height);
                 reshape(g_width, g_height);
             } else if (ev.window.event == SDL_WINDOWEVENT_MINIMIZED ||
                        ev.window.event == SDL_WINDOWEVENT_HIDDEN) {
@@ -205,6 +230,15 @@ int main(int argc, char* argv[])
     // SDL_Init (the video subsystem reads it during initialization). Under
     // Emscripten the driver is always WebGL, so this hint does not apply.
     SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "1");
+#ifdef __APPLE__
+    // Force ANGLE's Metal backend. Its default on macOS is the desktop-GL
+    // backend (Apple's deprecated GL-on-Metal), where every client-array
+    // draw does a glMapBufferRange that fully syncs with the GPU -- savers
+    // that replay display lists as many small draws (flux, fieldlines,
+    // lattice, solarwinds, skyrocket, hyperspace) drop to a few fps.
+    // Metal backend: flux 6 fps -> 60 fps. setenv(…, 0) keeps it overridable.
+    setenv("ANGLE_DEFAULT_PLATFORM", "metal", 0);
+#endif
 #endif
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
@@ -219,15 +253,27 @@ int main(int argc, char* argv[])
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     Uint32 flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+#ifndef __EMSCRIPTEN__
+    // Retina/HiDPI: without this flag the ANGLE surface is still created at
+    // pixel scale but SDL reports point sizes, so the viewport covers only
+    // the lower-left quadrant. With it, SDL_GL_GetDrawableSize returns true
+    // pixels. Native-only: emscripten canvas sizing is already correct.
+    flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+#endif
     if (g_fullscreen) flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-    g_window = SDL_CreateWindow("rss-port",
+    const char* slash = argv[0] ? strrchr(argv[0], '/') : 0;
+    const char* wtitle = rss_saver_name ? rss_saver_name
+                       : slash ? slash + 1
+                       : argv[0] ? argv[0] : "rss saver";
+
+    g_window = SDL_CreateWindow(wtitle,
                                 SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                 g_width, g_height, flags);
     if (!g_window) {
         // Depth 24 can fail on some GLES drivers; retry with 16.
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-        g_window = SDL_CreateWindow("rss-port",
+        g_window = SDL_CreateWindow(wtitle,
                                     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                     g_width, g_height, flags);
     }

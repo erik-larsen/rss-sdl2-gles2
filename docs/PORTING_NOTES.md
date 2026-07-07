@@ -332,3 +332,42 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     directive ignored" for gl4es and notes that the clang-only -Wno- flags in
     GL4ES_QUIET are unrecognized (~425 warnings on the first target); gate
     GL4ES_QUIET by compiler if it gets annoying.
+
+## Decisions log (native HiDPI/Retina fix)
+
+41. **SDL_WINDOW_ALLOW_HIGHDPI + drawable-size everywhere (native).** On
+    Retina, the ANGLE/Metal surface is created at pixel scale regardless, but
+    without ALLOW_HIGHDPI SDL reports point sizes (SDL_GL_GetDrawableSize ==
+    window size), so the glViewport covered only the lower-left quadrant.
+    Both shells (librs rsSDLSaver.cpp and mini-GLUT glut.h) now create windows
+    with SDL_WINDOW_ALLOW_HIGHDPI (native only; emscripten canvas sizing was
+    already correct and is unchanged) and size the viewport from
+    SDL_GL_GetDrawableSize -- including on SDL_WINDOWEVENT_SIZE_CHANGED, whose
+    event data1/data2 are points, not pixels. Same pattern as sgi-demos'
+    sdl_framebuffer.c. Verified with a probe: 640x480 window -> drawable
+    1280x960 with the flag, 640x480 without.
+
+## Decisions log (native macOS frame-rate fix: ANGLE Metal backend)
+
+42. **ANGLE_DEFAULT_PLATFORM=metal forced on macOS** (setenv with overwrite=0
+    in both shells, before SDL init). ANGLE's default on macOS is its
+    desktop-GL backend, which sits on Apple's deprecated GL-on-Metal
+    (GLEngine/AppleMetalOpenGLRenderer); there, every client-array draw does
+    a glMapBufferRange that fully syncs with the GPU (gldWaitForObject).
+    Savers whose display lists replay as many small DrawArrays cratered:
+    flux was 2.7 fps at 640x480 windowed. With the Metal backend: flux/
+    skyrocket 60 fps (vsync), solarwinds ~42, hyperspace ~30+. Confirmed by
+    sampling: 83% of frame time inside glMapBufferRange_Exec -> 
+    gfxWaitBufferOnDevices on the GL backend.
+
+    Diagnosis aid added: RSS_FPS_LOG=1 makes the librs shell print
+    "[fps] N fps, frame ms min/avg/max" to stderr every ~2s (rsSwapBuffers).
+
+    Remaining known issue: fieldlines (~21 fps) and lattice (~25 fps steady,
+    640x480) are still bound by ANGLE Metal's own per-draw sync — with many
+    small client-array draws its stream-buffer pool exhausts and DrawArrays
+    blocks in -[_MTLCommandBuffer waitUntilCompleted]. LIBGL_BATCH=1 and the
+    LIBGL_USEVBO modes don't help. A real fix means submitting renderlists
+    as fewer/larger draws (gl4es-level change); deferred. Also note the
+    one-time ~1s stalls shortly after launch are gl4es fpe shader compiles,
+    not the steady state.
