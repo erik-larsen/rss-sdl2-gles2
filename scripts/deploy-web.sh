@@ -11,6 +11,8 @@ for d in savers/*/; do
     mkdir -p "web/$s"
     cp savers/$s/web/$s.html savers/$s/web/$s.js savers/$s/web/$s.wasm "web/$s/" 2>/dev/null || true
     cp savers/$s/web/$s.data "web/$s/" 2>/dev/null || true
+    # gallery thumbnail (docs/screenshots/<s>-linux-gl4es.png -> shots/<s>.png)
+    cp "docs/screenshots/$s-linux-gl4es.png" "web/shots/$s.png" 2>/dev/null || true
     echo "deployed $s"
   fi
 done
