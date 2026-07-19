@@ -5,9 +5,6 @@ A port of [Terence M. Welsh's Really Slick Screensavers](https://www.reallyslick
 to SDL2 + OpenGL ES2, with native builds for Windows, Linux, and macOS and a
 browser build via Emscripten.
 
-The repo structure, Makefile build system, and ANGLE GLES2 setup follow
-[sgi-demos](https://github.com/sgi-demos/sgi-demos).
-
 ## How it works
 
 ```
