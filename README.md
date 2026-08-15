@@ -1,4 +1,4 @@
-# rss-sdl2-gles2 — Really Slick Screensavers on SDL2 / OpenGL ES2
+# rss-sdl2-gles2 — [Really Slick Screensavers](https://erik-larsen.github.io/rss-sdl2-gles2/) on SDL2 / OpenGL ES2
 
 ![screenshot](media/screenshot.png)
 
