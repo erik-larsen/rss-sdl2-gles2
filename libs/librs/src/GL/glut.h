@@ -195,6 +195,36 @@ static inline void rss_glut_pump(void) {
 static inline void rss_glut_frame(void) {
     rss_glut_pump();
     if (rss_glut_display) rss_glut_display();
+#ifdef __EMSCRIPTEN__
+    /* Pace to 60: the ASYNCIFY swap does not wait for the next animation
+     * frame (see librs/rsSDLSaver.cpp; usleep is unusable under ASYNCIFY) */
+    {
+        static double next_due = 0.0;
+        double now = emscripten_get_now();
+        if (next_due == 0.0) next_due = now;
+        next_due += 1000.0 / 60.0;
+        if (next_due > now) emscripten_sleep((unsigned int)(next_due - now));
+        else next_due = now;
+    }
+#else
+    /* Frame pacing to the display's refresh rate (60 if unknown): vsync is
+     * not reliable under ANGLE, and GLUT-era demos animate per-frame.
+     * (see librs/rsSDLSaver.cpp) */
+    static double target_ms = 0.0;
+    static Uint64 next_due = 0;
+    if (target_ms == 0.0) {
+        SDL_DisplayMode dm;
+        int di = SDL_GetWindowDisplayIndex(rss_glut_window);
+        int hz = (SDL_GetCurrentDisplayMode(di >= 0 ? di : 0, &dm) == 0 &&
+                  dm.refresh_rate > 0) ? dm.refresh_rate : 60;
+        target_ms = 1000.0 / (double)hz;
+    }
+    Uint64 now = SDL_GetTicks64();
+    if (next_due == 0) next_due = now;
+    next_due += (Uint64)target_ms;
+    if (next_due > now) SDL_Delay((Uint32)(next_due - now));
+    else next_due = now;  /* fell behind; don't try to catch up */
+#endif
 }
 
 static inline void glutMainLoop(void) {

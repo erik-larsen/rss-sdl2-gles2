@@ -13,6 +13,8 @@ for d in savers/*/; do
     cp savers/$s/web/$s.data "web/$s/" 2>/dev/null || true
     # gallery thumbnail (docs/screenshots/<s>-linux-gl4es.png -> shots/<s>.png)
     cp "docs/screenshots/$s-linux-gl4es.png" "web/shots/$s.png" 2>/dev/null || true
+    # per-saver option metadata for the settings panel (see gen_help.py)
+    cp "savers/$s/rss_options.json" "web/$s/options.json" 2>/dev/null || true
     echo "deployed $s"
   fi
 done

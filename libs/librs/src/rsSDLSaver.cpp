@@ -54,7 +54,10 @@ static SDL_GLContext g_context = NULL;
 static int g_running = 1;
 static int g_saver_mode = 0;   // exit on any input, like a real screensaver
 static int g_width = 1024, g_height = 640;
-static int g_fullscreen = 1;
+// Default windowed (use the OS's maximize/zoom for full screen); --fullscreen
+// opts in, and --saver mode always runs fullscreen.
+static int g_fullscreen = 0;
+static int g_fps_limit_arg = -1;  // explicit --fps-limit value; -1 = not given
 
 // gl4es frame hooks (exported in NOX11+NOEGL builds): pre_swap flushes any
 // batched/pending geometry; post_swap rebinds gl4es's internal FBO if in use.
@@ -116,13 +119,14 @@ static void print_help(const char* argv0)
     printf("\n%s \xe2\x80\x94 Really Slick Screensaver (SDL2 / OpenGL ES2)\n\n", name);
     printf("Usage: %s [shell options] [saver options]\n\n", argv0);
     printf("Shell options:\n"
-           "  --window WxH | -w WxH   run windowed at WxH (default 1024x640)\n"
-           "  --fullscreen | -f       run fullscreen (default)\n"
-           "  --saver                 screensaver mode: exit on any input\n"
-           "  --fps-limit N           limit frame rate to N fps (0 = none)\n"
+           "  --window WxH | -w WxH   set the window size (default 1024x640)\n"
+           "  --fullscreen | -f       run fullscreen (default windowed)\n"
+           "  --saver                 screensaver mode: fullscreen, exit on any input\n"
+           "  --fps-limit N           limit frame rate to N fps (default: the\n"
+           "                          display's refresh rate; 0 = uncapped)\n"
            "  --help | -h             show this help and exit\n\n");
     printf("Live controls (while running):\n"
-           "  F1                      toggle on-screen stats / FPS\n"
+           "  F1                      toggle on-screen FPS\n"
            "  Esc or Q                quit\n\n");
     if (rss_saver_options && rss_saver_options[0]) {
         printf("Saver options (value in given range):\n%s\n", rss_saver_options);
@@ -143,8 +147,9 @@ static void parse_shell_args(int argc, char* argv[])
         } else if (!strcmp(argv[i], "--saver")) {
             g_saver_mode = 1;
             g_fullscreen = 1;
-        } else if (!strcmp(argv[i], "--fps-limit")) {
-            if (i + 1 < argc) dFrameRateLimit = (unsigned int)atoi(argv[++i]);
+        } else if (!strcmp(argv[i], "--fps-limit") || !strcmp(argv[i], "-fps-limit")) {
+            // single-dash form arrives from the web shell's ?fps-limit=N
+            if (i + 1 < argc) g_fps_limit_arg = atoi(argv[++i]);
         } else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
             print_help(argv[0]);
             exit(0);
@@ -161,7 +166,7 @@ static void print_startup_banner(const char* argv0)
 #ifndef __EMSCRIPTEN__
     const char* name = rss_saver_name ? rss_saver_name : argv0;
     fprintf(stderr,
-            "%s: F1 = stats, Esc/Q = quit. Run with --help for saver options.\n",
+            "%s: F1 = FPS, Esc/Q = quit. Run with --help for saver options.\n",
             name);
 #else
     (void)argv0;
@@ -211,10 +216,24 @@ static void main_frame(void)
 {
     handle_events();
     idleProc();  // saver draws and swaps (glXSwapBuffers -> rsSwapBuffers)
-#ifndef __EMSCRIPTEN__
-    if (dFrameRateLimit > 0)
+    if (dFrameRateLimit > 0) {
+#ifdef __EMSCRIPTEN__
+        // The ASYNCIFY swap yields to the browser but does NOT wait for the
+        // next animation frame, so an unpaced loop runs well past display
+        // refresh (plasma measured 150 fps on the live gallery). usleep is
+        // NOT usable here (second-granularity under ASYNCIFY); pace with
+        // emscripten_sleep, no catch-up when a frame runs long.
+        static double next_due = 0.0;
+        const double target_ms = 1000.0 / (double)dFrameRateLimit;
+        double now = emscripten_get_now();
+        if (next_due == 0.0) next_due = now;
+        next_due += target_ms;
+        if (next_due > now) emscripten_sleep((unsigned int)(next_due - now));
+        else next_due = now;
+#else
         g_frame_timer.wait(1.0 / (double)dFrameRateLimit);
 #endif
+    }
 }
 
 int main(int argc, char* argv[])
@@ -299,6 +318,28 @@ int main(int argc, char* argv[])
     if (g_saver_mode) SDL_ShowCursor(SDL_DISABLE);
 
     handleCommandLine(argc, argv);
+
+    // Frame pacing. Vsync (SwapInterval above) is not reliable under ANGLE —
+    // Metal renders windowed frames uncapped — and several savers animate
+    // per-frame rather than per-second (plasma), so run the shell's limiter
+    // every frame. Default: the display's refresh rate, 60 if unknown (and
+    // always 60 on emscripten, where refresh isn't queryable through SDL).
+    // Explicit --fps-limit N wins over everything (0 = uncapped); a saver's
+    // own preset value survives if the user didn't ask otherwise (flux
+    // presets set dFrameRateLimit=60).
+    if (g_fps_limit_arg >= 0) {
+        dFrameRateLimit = (unsigned int)g_fps_limit_arg;
+    } else if (dFrameRateLimit == 0) {
+#ifndef __EMSCRIPTEN__
+        SDL_DisplayMode dm;
+        int di = SDL_GetWindowDisplayIndex(g_window);
+        if (SDL_GetCurrentDisplayMode(di >= 0 ? di : 0, &dm) == 0 && dm.refresh_rate > 0)
+            dFrameRateLimit = (unsigned int)dm.refresh_rate;
+        else
+#endif
+            dFrameRateLimit = 60;
+    }
+
     reshape(g_width, g_height);
     initSaver();
 

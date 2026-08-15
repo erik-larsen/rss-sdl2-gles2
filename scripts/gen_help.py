@@ -23,7 +23,7 @@ import os
 CALL_RE = re.compile(
     r'getArgumentsValue\s*\(\s*argc\s*,\s*argv\s*,\s*'
     r'std::string\(\s*"(-[A-Za-z0-9_]+)"\s*\)\s*,\s*'
-    r'[A-Za-z_][A-Za-z0-9_]*\s*'
+    r'([A-Za-z_][A-Za-z0-9_]*)\s*'
     r'(?:,\s*([A-Za-z0-9_]+)\s*,\s*([A-Za-z0-9_]+)\s*)?\)'
 )
 
@@ -39,12 +39,38 @@ def parse_options(cpp_path):
     opts = []
     seen = set()
     for mo in CALL_RE.finditer(body):
-        name, lo, hi = mo.group(1), mo.group(2), mo.group(3)
+        name, var, lo, hi = mo.group(1), mo.group(2), mo.group(3), mo.group(4)
         if name in seen:
             continue
         seen.add(name)
-        opts.append((name, lo, hi))
+        opts.append((name, var, lo, hi))
     return opts
+
+def parse_defaults(cpp_path):
+    """Default values, from setDefaults(). Two upstream shapes:
+       - void setDefaults()      { dVar = N; ... }        (plain)
+       - void setDefaults(int w) { switch(w){ case DEFAULTS1: dVar = N; ...
+         (presets; handleCommandLine inits with DEFAULTS1, so use that block)
+       Returns (defaults {var: number}, preset_names {n: label})."""
+    src = open(cpp_path, encoding='utf-8', errors='replace').read()
+    defaults, preset_names = {}, {}
+    m = re.search(r'void\s+setDefaults\s*\(([^)]*)\)\s*\{', src)
+    if not m:
+        return defaults, preset_names
+    body = src[m.end():]
+    end = body.find('\n}\n')
+    if end != -1:
+        body = body[:end]
+    if 'switch' in body and m.group(1).strip():
+        for pm in re.finditer(r'case\s+DEFAULTS(\d+)\s*:\s*(?://\s*(.*))?', body):
+            if pm.group(2):
+                preset_names[int(pm.group(1))] = pm.group(2).strip()
+        first_break = body.find('break;')
+        if first_break != -1:
+            body = body[:first_break]
+    for am in re.finditer(r'\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(-?\d+(?:\.\d+)?)\s*;', body):
+        defaults.setdefault(am.group(1), float(am.group(2)))
+    return defaults, preset_names
 
 def c_escape(s):
     return s.replace('\\', '\\\\').replace('"', '\\"')
@@ -52,8 +78,8 @@ def c_escape(s):
 def emit(saver, opts, out_path):
     lines = []
     if opts:
-        width = max(len(n) for n, _, _ in opts)
-        for name, lo, hi in opts:
+        width = max(len(n) for n, _, _, _ in opts)
+        for name, _var, lo, hi in opts:
             rng = ''
             if lo is not None and hi is not None:
                 # DEFAULTSn presets are sequential ints; show as 1..N.
@@ -98,12 +124,54 @@ def find_main_cpp(saver_dir):
             return p
     return None
 
+def emit_json(saver, opts, defaults, preset_names, out_path):
+    """Structured option metadata for the web shell's settings UI."""
+    import json
+    entries = []
+    seen_vars = set()
+    for name, var, lo, hi in opts:
+        # CLI aliases bind two option names to one variable (flocks'
+        # -colorfadespeed / -fadespeed); show only the first in the UI.
+        if var in seen_vars:
+            continue
+        seen_vars.add(var)
+        e = {'opt': name.lstrip('-')}
+        dlo = re.match(r'DEFAULTS(\d+)', lo or '')
+        dhi = re.match(r'DEFAULTS(\d+)', hi or '')
+        if dlo and dhi:
+            e['kind'] = 'preset'
+            e['min'], e['max'] = int(dlo.group(1)), int(dhi.group(1))
+            e['default'] = int(dlo.group(1))
+            if preset_names:
+                e['names'] = {str(k): v for k, v in sorted(preset_names.items())}
+        else:
+            try:
+                e['min'], e['max'] = int(lo), int(hi)
+            except (TypeError, ValueError):
+                pass
+            e['kind'] = 'bool' if (e.get('min') == 0 and e.get('max') == 1) else 'int'
+            if var in defaults:
+                d = defaults[var]
+                # A few upstream defaults sit outside their own CLI range
+                # (flux dWind=20, range 1..10); clamp so the slider can
+                # represent "default" and Apply's no-change test holds.
+                if 'min' in e:
+                    d = min(max(d, e['min']), e['max'])
+                e['default'] = int(d) if float(d).is_integer() else d
+        entries.append(e)
+    with open(out_path, 'w') as f:
+        json.dump({'saver': saver, 'options': entries}, f, indent=1)
+    return len(entries)
+
 def process(cpp_path):
     saver = os.path.basename(os.path.dirname(cpp_path))
     opts = parse_options(cpp_path)
+    defaults, preset_names = parse_defaults(cpp_path)
     out = os.path.join(os.path.dirname(cpp_path), 'rss_help.cpp')
     n = emit(saver, opts, out)
-    print('%-14s %2d options -> %s' % (saver, n, out))
+    jout = os.path.join(os.path.dirname(cpp_path), 'rss_options.json')
+    emit_json(saver, opts, defaults, preset_names, jout)
+    print('%-14s %2d options -> %s (+ rss_options.json)' % (saver, n, out))
 
 def main(argv):
     if not argv:

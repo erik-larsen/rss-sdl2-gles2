@@ -371,3 +371,92 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     as fewer/larger draws (gl4es-level change); deferred. Also note the
     one-time ~1s stalls shortly after launch are gl4es fpe shader compiles,
     not the steady state.
+
+## Decisions log (web settings panel + HUD cleanup, native windowed default)
+
+43. **Per-saver settings UI in the web HUD.** gen_help.py now also emits
+    savers/<s>/rss_options.json (option name, min/max, clamped default, kind:
+    int/bool/preset with preset names parsed from the setDefaults(int) case
+    comments); deploy-web.sh copies it to web/<s>/options.json. shell.html
+    fetches it and builds controls in the HUD: sliders for ranges, checkboxes
+    for 0..1, a named dropdown for -default presets. Apply reloads the page
+    with only-non-default URL query params; on load the shell turns query
+    params into Module.arguments, so the saver's unmodified
+    handleCommandLine() parses them exactly like the CLI. Plain HTML controls,
+    not a GL toolkit -- the HUD is already HTML and savers read options once
+    at startup, so a reload is the honest lifecycle. Defaults out of CLI range
+    upstream (flux dWind=20, range 1..10) are clamped in the metadata.
+    CLI aliases for one variable (flocks -colorfadespeed/-fadespeed) are
+    deduped in the UI, kept in --help. If query params are present the panel
+    skips its initial auto-hide (visible confirmation of custom settings).
+
+    HUD cleanup (user feedback on the deployed gallery): "Toggle stats" is now
+    "Toggle FPS" (native --help/banner updated to match); Show/hide controls
+    listed first; the in-panel Fullscreen / Exit-fullscreen rows are gone
+    (canvas requestFullscreen crashed the page under Firefox -- use the
+    browser's own fullscreen); the "press H for controls" hint and "click
+    canvas to capture input" footer are gone (input capture needs no click --
+    key handling is window-level).
+
+44. **Native default is windowed** (1024x640; OS maximize/zoom for big).
+    --fullscreen/-f opts in; --saver mode still forces fullscreen.
+
+## Decisions log (native frame-rate limiter)
+
+45. **Native frame pacing defaults to the display's refresh rate** (60 if SDL
+    can't report one). Rationale: SDL_GL_SetSwapInterval(1) is not reliably
+    honored under ANGLE (Metal renders windowed frames uncapped — cyclone
+    measured 2000+ fps), and several savers animate per-FRAME rather than
+    per-second (plasma advances its field ct[i] += cv[i] every draw), so
+    uncapped rendering plays them absurdly fast vs. the vsynced Windows
+    original. Resolution order in the librs shell, applied after
+    handleCommandLine: explicit --fps-limit N wins (0 = uncapped); else a
+    saver-set dFrameRateLimit survives (flux presets set 60); else
+    SDL_GetCurrentDisplayMode refresh, else 60. mini-GLUT paces its frame
+    loop the same way (SDL_Delay to the refresh interval, no catch-up).
+    Emscripten too: the ASYNCIFY swap yields to the browser but does NOT
+    wait for the next animation frame, so the unpaced web loop also ran past
+    refresh (plasma showed 150 fps on the live gallery). The same limiter now
+    runs on web with a fixed 60 default (refresh isn't queryable through SDL
+    there; rsTimer::wait's usleep yields correctly under ASYNCIFY), and
+    ?fps-limit=N / ?fpslog=1 query params reach the shell as args.
+    Verified: cyclone 2000+ -> 60.0 fps flat native.
+
+    plasma runs ~30 fps capped OR uncapped — NOT compute-bound (min frames
+    are ~2 ms): sampling shows ~91% of its frame inside gl4es_glTexSubImage2D
+    -> ANGLE GL_TexSubImage2D -> -[_MTLCommandBuffer waitUntilCompleted].
+    plasma re-uploads its whole field texture every frame while the previous
+    frame still references it, and ANGLE Metal drains the GPU before
+    overwriting instead of staging. Same per-draw-sync family as the
+    fieldlines/lattice issue in entry 42; a fix would double-buffer the
+    texture (gl4es texture.c or saver-level) — deferred with entry 42's.
+
+## Decisions log (web: skyrocket wasm crash, fps observations)
+
+46. **skyrocket web crash ("memory access out of bounds", black canvas):
+    wasm MAIN-STACK overflow — emscripten's default STACK_SIZE is 64KB.**
+    Diagnosis was a chase: the first ASSERTIONS build showed a corrupted
+    stack-pointer restore, initially blamed on the asyncify unwind buffer
+    (ASYNCIFY_STACK_SIZE=65536 -> 1MB; kept as cheap insurance but it was
+    NOT the fix — Firefox still crashed). A memory-growth theory
+    (INITIAL_MEMORY=MAXIMUM) also failed. The decisive clue came from an
+    ASSERTIONS=1 --profiling-funcs build with STACK_OVERFLOW_CHECK:
+    "Stack overflow detected. You can try increasing -sSTACK_SIZE
+    (currently set to 65536)". skyrocket's draw path needs more than 64KB
+    of C stack (native gets 8MB and runs clean); the overflow scribbles
+    over linear memory, so the visible failures were downstream corruption
+    — OOB traps from unrelated code (e.g. inside SDL's visibilitychange
+    handler) and a black canvas. platform.mk now sets -sSTACK_SIZE=8388608
+    (native's default) for all web targets. Verified: full fireworks scene
+    renders and soaks clean where every prior build crashed or drew black.
+    Lesson recorded for future wasm ports: "memory access out of bounds"
+    at random call sites = suspect stack overflow FIRST; build with
+    -sASSERTIONS=1 --profiling-funcs to get the real message and names.
+
+    Field fps observations (user, live build BEFORE the entry-45 web limiter
+    was deployed): flux/solarwinds/cyclone/fieldlines/euphoria/flocks/
+    plasma/helios ran 100-180 fps (unpaced, as diagnosed); lattice/microcosm
+    20-30 fps and hyperspace ~5 fps are REAL WebGL/gl4es performance issues
+    (hyperspace = shaderconv-generated GLSL), still open. F1 shows no fps in
+    testsaver/implicitdemo by design: F1 toggles kStatistics but rendering
+    the readout is per-saver code those two never had.

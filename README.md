@@ -44,9 +44,10 @@ make -C savers/flux run-native     # build & run one saver windowed
 Run options for every saver:
 
 ```
---window WxH | -w WxH   run windowed (default fullscreen)
---saver                 screensaver mode: exit on any key/click
---fps-limit N           cap the frame rate
+--window WxH | -w WxH   set the window size (default 1024x640, windowed)
+--fullscreen | -f       run fullscreen (default windowed)
+--saver                 screensaver mode: fullscreen, exit on any key/click
+--fps-limit N           cap the frame rate (default: display refresh; 0 = uncapped)
 ```
 
 plus each saver's original options (e.g. flux: `-fluxes`, `-particles`,

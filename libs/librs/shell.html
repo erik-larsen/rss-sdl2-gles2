@@ -25,19 +25,14 @@
       border-radius: 2px; overflow: hidden;
     }
     #bar > div { height: 100%; width: 0; background: #6cf; transition: width 0.2s; }
-    #hint {
-      position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%);
-      font-size: 11px; color: #444; pointer-events: none;
-      transition: opacity 1s; opacity: 0.7;
-    }
-    #hint.hidden { opacity: 0; }
 
-    /* Controls legend HUD */
+    /* Controls HUD */
     #hud {
       position: fixed; top: 14px; right: 14px; z-index: 10;
       background: rgba(16,16,24,0.82); border: 1px solid #2a2a38;
       border-radius: 10px; padding: 12px 14px 12px 14px;
-      font-size: 12px; color: #d6d6e2; min-width: 150px;
+      font-size: 12px; color: #d6d6e2; min-width: 200px; max-width: 260px;
+      max-height: calc(100vh - 44px); overflow-y: auto;
       backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
       transition: opacity 0.4s, transform 0.4s;
       box-shadow: 0 4px 18px rgba(0,0,0,0.45);
@@ -47,7 +42,7 @@
       margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
       text-transform: uppercase; color: #9a9ab0;
     }
-    #hud .row { display: flex; justify-content: space-between; gap: 16px; margin: 4px 0; line-height: 1.5; }
+    #hud .row { display: flex; justify-content: space-between; gap: 16px; margin: 4px 0; line-height: 1.5; align-items: center; }
     #hud .row .act { color: #aab; }
     #hud kbd {
       font-family: inherit; font-size: 11px; color: #cdf;
@@ -55,8 +50,33 @@
       border-radius: 4px; padding: 1px 6px; min-width: 14px; text-align: center;
       display: inline-block;
     }
-    #hud .foot { margin-top: 9px; padding-top: 8px; border-top: 1px solid #2a2a38;
-      font-size: 10px; color: #6a6a80; }
+    /* per-saver options */
+    #opts .sect {
+      margin: 10px 0 6px; padding-top: 8px; border-top: 1px solid #2a2a38;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #9a9ab0;
+    }
+    #opts .orow { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 7px 0; align-items: center; }
+    #opts .oname { color: #aab; }
+    #opts .oval  { color: #cdf; font-variant-numeric: tabular-nums; text-align: right; }
+    #opts input[type=range] {
+      grid-column: 1 / span 2; width: 100%; margin: 0; accent-color: #6cf; height: 18px;
+    }
+    #opts input[type=checkbox] { accent-color: #6cf; margin: 0; }
+    #opts select {
+      grid-column: 1 / span 2; width: 100%;
+      background: #20202c; color: #cdf; border: 1px solid #34344a; border-radius: 4px;
+      font: inherit; font-size: 11px; padding: 2px 4px;
+    }
+    #opts .btns { display: flex; gap: 8px; margin-top: 10px; }
+    #opts button {
+      flex: 1; background: #20202c; color: #cdf; border: 1px solid #34344a;
+      border-radius: 5px; font: inherit; font-size: 11px; padding: 4px 0; cursor: pointer;
+    }
+    #opts button:hover { background: #2a2a3c; }
+    #opts button.primary { background: #1c3a50; border-color: #2c5a7a; }
+    #opts button.primary:hover { background: #23485f; }
+
     /* small floating "?" button to reopen the HUD once hidden */
     #hudtoggle {
       position: fixed; top: 14px; right: 14px; z-index: 9;
@@ -75,19 +95,15 @@
 
   <div id="hud">
     <h2 id="hudtitle">Controls</h2>
-    <div class="row"><span class="act">Toggle stats</span> <kbd>F1</kbd></div>
-    <div class="row" id="fsrow" style="cursor:pointer"><span class="act">Fullscreen</span> <kbd>click</kbd></div>
-    <div class="row"><span class="act">Show / hide this</span> <kbd>H</kbd></div>
-    <div class="row"><span class="act">Exit fullscreen</span> <kbd>Esc</kbd></div>
-    <div class="foot">click canvas to capture input</div>
+    <div class="row"><span class="act">Show/hide controls</span> <kbd>H</kbd></div>
+    <div class="row"><span class="act">Toggle FPS</span> <kbd>F1</kbd></div>
+    <div id="opts"></div>
   </div>
   <div id="hudtoggle" title="Show controls (H)">?</div>
-  <div id="hint">press <b>&nbsp;H&nbsp;</b> for controls</div>
 
   <script type="text/javascript">
     var statusEl = document.getElementById('status');
     var barEl = document.getElementById('barfill');
-    var hintEl = document.getElementById('hint');
     var hideTimer = null;
 
     var Module = {
@@ -98,11 +114,22 @@
         }, false);
         return c;
       })(),
+      // Per-saver options arrive as URL query params (?particles=100&size=20,
+      // set by the HUD's Apply) and are handed to the saver as real argv, so
+      // its unmodified handleCommandLine() parses them like the CLI would.
+      arguments: (function () {
+        var a = [];
+        try {
+          new URLSearchParams(location.search).forEach(function (v, k) {
+            a.push('-' + k, v);
+          });
+        } catch (e) {}
+        return a;
+      })(),
       setStatus: function (text) {
         if (!text) {
           statusEl.classList.add('hidden');
           if (!hideTimer) hideTimer = setTimeout(function () {
-            hintEl.classList.add('hidden');
             if (window.rssHud) window.rssHud.autohide();
           }, 4000);
           return;
@@ -133,10 +160,12 @@
       if (typeof ENV !== 'undefined') {
         ENV.LIBGL_USEVBO = '1';
         ENV.LIBGL_BATCH = '1';
+        // ?fpslog=1: frame-pacing stats on the console (see librs RSS_FPS_LOG)
+        if (location.search.indexOf('fpslog') !== -1) ENV.RSS_FPS_LOG = '1';
       }
     });
 
-    // ---- Controls legend HUD ----
+    // ---- Controls HUD ----
     (function () {
       var hud = document.getElementById('hud');
       var toggle = document.getElementById('hudtoggle');
@@ -152,7 +181,7 @@
         if (m && m[1] && m[1].toLowerCase() !== 'index') name = m[1];
       } catch (e) {}
       if (name) {
-        titleEl.textContent = name.charAt(0).toUpperCase() + name.slice(1) + ' \u2022 Controls';
+        titleEl.textContent = name.charAt(0).toUpperCase() + name.slice(1) + ' • Controls';
         document.title = name.charAt(0).toUpperCase() + name.slice(1);
       }
 
@@ -166,7 +195,7 @@
         autohide: function () { if (visible) hide(); }
       };
 
-      // 'H' or '?' toggles the legend. Handle it here in the page so it does
+      // 'H' or '?' toggles the panel. Handle it here in the page so it does
       // NOT reach the wasm canvas (the savers don't use these keys anyway).
       window.addEventListener('keydown', function (e) {
         if (e.key === 'h' || e.key === 'H' || e.key === '?') {
@@ -177,13 +206,94 @@
 
       toggle.addEventListener('click', show);
 
-      // Fullscreen: on web, fullscreen is the browser's job, not a saver key.
-      var fsrow = document.getElementById('fsrow');
-      if (fsrow) fsrow.addEventListener('click', function () {
-        var c = document.getElementById('canvas');
-        var req = c.requestFullscreen || c.webkitRequestFullscreen || c.msRequestFullscreen;
-        if (req) req.call(c);
-      });
+      // ---- Per-saver options (built from options.json next to the page) ----
+      // Values are applied by reloading with URL query params; the savers read
+      // their settings once at startup, so a reload is the honest lifecycle.
+      fetch('options.json').then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (meta) {
+        if (!meta || !meta.options || !meta.options.length) return;
+        var params = new URLSearchParams(location.search);
+        var box = document.getElementById('opts');
+        var controls = [];
+
+        var sect = document.createElement('div');
+        sect.className = 'sect'; sect.textContent = 'Options';
+        box.appendChild(sect);
+
+        meta.options.forEach(function (o) {
+          var cur = params.has(o.opt) ? Number(params.get(o.opt))
+                  : (o.default !== undefined ? o.default : (o.min !== undefined ? o.min : 0));
+          var row = document.createElement('div'); row.className = 'orow';
+          var nameEl = document.createElement('span');
+          nameEl.className = 'oname'; nameEl.textContent = o.opt;
+          row.appendChild(nameEl);
+          var input, valEl = null;
+
+          if (o.kind === 'preset') {
+            nameEl.textContent = 'preset';
+            input = document.createElement('select');
+            for (var i = o.min; i <= o.max; i++) {
+              var op = document.createElement('option');
+              op.value = i;
+              op.textContent = (o.names && o.names[i]) ? o.names[i] : ('preset ' + i);
+              input.appendChild(op);
+            }
+            input.value = cur;
+            row.appendChild(document.createElement('span'));
+            row.appendChild(input);
+          } else if (o.kind === 'bool') {
+            input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = cur >= 1;
+            row.appendChild(input);
+          } else {
+            valEl = document.createElement('span');
+            valEl.className = 'oval'; valEl.textContent = cur;
+            row.appendChild(valEl);
+            input = document.createElement('input');
+            input.type = 'range';
+            input.min = o.min !== undefined ? o.min : 0;
+            input.max = o.max !== undefined ? o.max : 100;
+            input.step = 1;
+            input.value = cur;
+            input.addEventListener('input', function () { valEl.textContent = input.value; });
+            row.appendChild(input);
+          }
+          box.appendChild(row);
+          controls.push({ o: o, input: input });
+        });
+
+        var btns = document.createElement('div'); btns.className = 'btns';
+        var apply = document.createElement('button');
+        apply.className = 'primary'; apply.textContent = 'Apply';
+        apply.addEventListener('click', function () {
+          var p = new URLSearchParams();
+          controls.forEach(function (c) {
+            var v = c.o.kind === 'bool' ? (c.input.checked ? 1 : 0) : Number(c.input.value);
+            if (v !== (c.o.default !== undefined ? c.o.default : NaN)) p.set(c.o.opt, v);
+          });
+          var q = p.toString();
+          if (q !== location.search.replace(/^\?/, '')) {
+            location.search = q;              // reloads with the new settings
+          }
+        });
+        var reset = document.createElement('button');
+        reset.textContent = 'Defaults';
+        reset.addEventListener('click', function () {
+          if (location.search) location.search = '';
+          else controls.forEach(function (c) {
+            var d = c.o.default !== undefined ? c.o.default : (c.o.min !== undefined ? c.o.min : 0);
+            if (c.o.kind === 'bool') c.input.checked = d >= 1;
+            else { c.input.value = d; c.input.dispatchEvent(new Event('input')); }
+          });
+        });
+        btns.appendChild(apply); btns.appendChild(reset);
+        box.appendChild(btns);
+
+        // If the user customized settings, keep the panel open on load.
+        if (location.search) window.rssHud.autohide = function () {};
+      }).catch(function () { /* no options.json: plain legend */ });
     })();
   </script>
   {{{ SCRIPT }}}

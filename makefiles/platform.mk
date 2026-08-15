@@ -84,8 +84,12 @@ OPT_TWO = -DNDEBUG -O2
 OPT = $(OPT_TWO)
 EM_OPT = $(OPT_TWO)
 
-# ASYNCIFY: allow the unmodified native main loop to yield to the browser
-EM_ASYNCIFY = -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536
+# ASYNCIFY: allow the unmodified native main loop to yield to the browser.
+# The asyncify stack must hold the WHOLE C stack at the moment of the yield
+# (the savers swap from deep inside draw with large locals); 64KB overflowed
+# for skyrocket -- corrupted SP restore -> "memory access out of bounds"
+# after ~30s. 1MB of linear memory per saver is cheap insurance.
+EM_ASYNCIFY = -sASYNCIFY -sASYNCIFY_STACK_SIZE=1048576
 
 # Heap: savers allocate large textures/particle buffers (plasma needs ~40MB),
 # so allow the wasm heap to grow rather than fixing a small initial size.
@@ -93,8 +97,12 @@ EM_ASYNCIFY = -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536
 # client-side vertex arrays; emscripten's FULL_ES2 path copies these through a
 # temp VBO whose default max (2MB) is too small for big draws (hyperspace's
 # starfield), causing an out-of-range crash. 32MB comfortably covers them.
+# STACK_SIZE: emscripten's default main C stack is a mere 64KB (native gets
+# 8MB); skyrocket's draw path overflows it, silently corrupting linear memory
+# ("memory access out of bounds" from random code ~30-60s in, black canvas).
+# Match the native default.
 EM_MEMORY = -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=67108864 -sMAXIMUM_MEMORY=268435456 \
-            -sGL_MAX_TEMP_BUFFER_SIZE=33554432
+            -sGL_MAX_TEMP_BUFFER_SIZE=33554432 -sSTACK_SIZE=8388608
 
 # Debug options
 EXTRA_DEBUG =
