@@ -97,6 +97,7 @@
     <h2 id="hudtitle">Controls</h2>
     <div class="row"><span class="act">Show/hide controls</span> <kbd>H</kbd></div>
     <div class="row"><span class="act">Toggle FPS</span> <kbd>F1</kbd></div>
+    <div class="row"><span class="act">Back to gallery</span> <kbd>Esc</kbd></div>
     <div id="opts"></div>
   </div>
   <div id="hudtoggle" title="Show controls (H)">?</div>
@@ -185,6 +186,21 @@
         document.title = name.charAt(0).toUpperCase() + name.slice(1);
       }
 
+      // Keep HUD interactions away from SDL. Emscripten's SDL registers
+      // document-level mouse/touch handlers that preventDefault, which
+      // cancels the native drag on the panel's <input type=range> — the
+      // thumb snaps back to its old value on release. Stopping propagation
+      // at the panel boundary leaves the controls' native behavior intact
+      // (the events still reach their targets) but SDL never sees them.
+      // Native range-drag uses implicit pointer capture, so even drags that
+      // wander off the panel keep targeting the input and are caught here.
+      ['pointerdown', 'pointermove', 'pointerup', 'mousedown', 'mousemove',
+       'mouseup', 'touchstart', 'touchmove', 'touchend', 'wheel', 'click',
+       'dblclick'].forEach(function (t) {
+        hud.addEventListener(t, function (e) { e.stopPropagation(); });
+        toggle.addEventListener(t, function (e) { e.stopPropagation(); });
+      });
+
       var visible = true;
       function show() { visible = true; hud.classList.remove('hidden'); toggle.classList.remove('show'); }
       function hide() { visible = false; hud.classList.add('hidden'); toggle.classList.add('show'); }
@@ -195,12 +211,22 @@
         autohide: function () { if (visible) hide(); }
       };
 
-      // 'H' or '?' toggles the panel. Handle it here in the page so it does
-      // NOT reach the wasm canvas (the savers don't use these keys anyway).
+      // 'H' or '?' toggles the panel. Esc/Q leaves the saver page: back to
+      // the previous page when there is one, else up to the gallery. (The
+      // wasm shell would otherwise treat Esc/Q as "quit", ending the main
+      // loop and leaving a dead black canvas.) Both are handled here in the
+      // page, capture-phase, so they never reach the wasm canvas. When the
+      // browser is fullscreen, Esc is left alone — it exits fullscreen.
       window.addEventListener('keydown', function (e) {
         if (e.key === 'h' || e.key === 'H' || e.key === '?') {
           visible ? hide() : show();
           e.preventDefault();
+        } else if ((e.key === 'Escape' || e.key === 'q' || e.key === 'Q') &&
+                   !document.fullscreenElement) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (document.referrer && history.length > 1) history.back();
+          else location.href = '../';
         }
       }, true);
 
@@ -275,13 +301,15 @@
           });
           var q = p.toString();
           if (q !== location.search.replace(/^\?/, '')) {
-            location.search = q;              // reloads with the new settings
+            // replace() so settings states don't pile up in history —
+            // Esc (history.back) then leaves the saver, not the settings
+            location.replace(location.pathname + (q ? '?' + q : ''));
           }
         });
         var reset = document.createElement('button');
         reset.textContent = 'Defaults';
         reset.addEventListener('click', function () {
-          if (location.search) location.search = '';
+          if (location.search) location.replace(location.pathname);
           else controls.forEach(function (c) {
             var d = c.o.default !== undefined ? c.o.default : (c.o.min !== undefined ? c.o.min : 0);
             if (c.o.kind === 'bool') c.input.checked = d >= 1;

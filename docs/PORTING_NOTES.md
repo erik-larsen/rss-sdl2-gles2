@@ -460,3 +460,27 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     (hyperspace = shaderconv-generated GLSL), still open. F1 shows no fps in
     testsaver/implicitdemo by design: F1 toggles kStatistics but rendering
     the readout is per-saver code those two never had.
+
+## Decisions log (web HUD interaction fixes)
+
+47. **HUD events must be isolated from SDL.** Emscripten's SDL registers
+    document-level mouse/touch handlers that preventDefault, which cancels
+    the native drag on the panel's <input type=range> — the thumb tracked
+    the pointer but snapped back to its old value on release (reported on
+    all sliders). shell.html now stops propagation of pointer/mouse/touch/
+    wheel/click events at the #hud and #hudtoggle boundary (bubble phase):
+    the controls' native behavior is untouched, SDL just never sees the
+    events. Native range-drag uses implicit pointer capture, so drags that
+    wander off the panel still target the input and are still caught.
+    (The flocks chromatek/connections "no effect" report was this same bug
+    upstream of Apply — the options themselves work; verified visually
+    with ?connections=1&chromatek=1.)
+
+48. **Esc/Q on web leaves the page instead of killing the loop.** The wasm
+    shell's quit path just ended the main loop, leaving a dead black canvas.
+    The page now intercepts Esc/Q (capture phase, before SDL): history.back()
+    when there's a previous page, else ../ (the gallery). Esc is left alone
+    while browser-fullscreen so it exits fullscreen first. Apply/Defaults use
+    location.replace() so settings states don't pile up in history — Esc
+    steps out of the saver, not back through its settings. HUD legend row
+    added: "Back to gallery — Esc".
