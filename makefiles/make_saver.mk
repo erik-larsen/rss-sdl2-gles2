@@ -2,8 +2,10 @@ include ../../makefiles/platform.mk
 
 # Expects (set before including this file):
 #   APPNAME            - saver executable name, e.g. flux
-#   SAVER_EXTRA_CFLAGS - optional extra compile flags
+#   SAVER_EXTRA_CFLAGS - optional extra native compile flags
 #   SAVER_EXTRA_LIBS   - optional extra native link libs (e.g. -lopenal)
+#   EM_SAVER_EXTRA_CFLAGS - optional extra emcc compile flags (defines must
+#                           go here, not in EM_SAVER_EXTRA — that's link-only)
 #   EM_SAVER_EXTRA     - optional extra emcc link flags
 
 APP = $(BIN_DIR)/$(APPNAME)
@@ -16,7 +18,7 @@ OBJS = $(patsubst %.cpp,$(BIN_DIR)/%.o,$(SRC))
 EM_OBJS = $(patsubst %.cpp,$(WEB_DIR)/%.o,$(SRC))
 
 # Savers are built against the rsXScreenSaver code path, impersonated by librs
-SAVER_DEFS = -DRS_XSCREENSAVER $(SAVER_EXTRA_CFLAGS)
+SAVER_DEFS = -DRS_XSCREENSAVER
 SAVER_INC = $(LIBRS_INC) $(GL4ES_INC) $(GLUES_INC) $(RSMATH_INC) $(SHIM_INC)
 
 all: native browser
@@ -59,7 +61,7 @@ $(WEB_DIR):
 LIBRS_HDRS = $(wildcard $(LIBRS_DIR)/src/*.h $(LIBRS_DIR)/src/*/*.h)
 
 $(OBJS): $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp $(HDRS) $(LIBRS_HDRS) | $(BIN_DIR)
-	$(SAVER_CODE_CXX) $(OPT) $(SAVER_CODE_WARN_OFF) $(SAVER_DEFS) $(SAVER_INC) $(SDL_INC) $< -c -o $@
+	$(SAVER_CODE_CXX) $(OPT) $(SAVER_CODE_WARN_OFF) $(SAVER_DEFS) $(SAVER_EXTRA_CFLAGS) $(SAVER_INC) $(SDL_INC) $< -c -o $@
 
 $(APP): $(GL4ES_LIB) $(GLUES_LIB) $(RSMATH_LIB) $(LIBRS_LIB) $(OBJS)
 	$(MODERN_CODE_CXX) $(OPT) $(OBJS) \
@@ -71,7 +73,7 @@ $(APP): $(GL4ES_LIB) $(GLUES_LIB) $(RSMATH_LIB) $(LIBRS_LIB) $(OBJS)
 	@echo BUILT: $@
 
 $(EM_OBJS): $(WEB_DIR)/%.o: $(SRC_DIR)/%.cpp $(HDRS) $(LIBRS_HDRS) | $(WEB_DIR)
-	$(SAVER_CODE_EMCXX) $(EM_OPT) $(EM_SAVER_CODE_WARN_OFF) $(SAVER_DEFS) $(SAVER_INC) $(EM_SDL_LIBS) $< -c -o $@
+	$(SAVER_CODE_EMCXX) $(EM_OPT) $(EM_SAVER_CODE_WARN_OFF) $(SAVER_DEFS) $(EM_SAVER_EXTRA_CFLAGS) $(SAVER_INC) $(EM_SDL_LIBS) $< -c -o $@
 
 # Custom HTML shell (fullscreen black canvas) replacing emscripten's default
 EM_SHELL = --shell-file $(LIBRS_DIR)/shell.html

@@ -484,3 +484,23 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     location.replace() so settings states don't pile up in history — Esc
     steps out of the saver, not back through its settings. HUD legend row
     added: "Back to gallery — Esc".
+
+## Decisions log (skyrocket sound)
+
+49. **skyrocket sound was broken everywhere; three fixes:**
+    a. **Web was compiled as the muted stub all along.** -DRSS_USE_OPENAL
+       lived in EM_SAVER_EXTRA, which is LINK-only; the web soundEngine.o
+       compiled without it, so no OpenAL code entered the wasm.
+       make_saver.mk now has EM_SAVER_EXTRA_CFLAGS (web compile flags) and
+       applies SAVER_EXTRA_CFLAGS only to native compiles (it previously
+       leaked into web compiles via SAVER_DEFS, coupling web sound to the
+       HOST's pkg-config state).
+    b. **Browser autoplay policy:** emscripten's OpenAL creates its
+       AudioContext before any user gesture and — unlike emscripten's
+       SDL-audio path — never resumes it. shell.html wraps the AudioContext
+       constructor, captures every context the wasm creates, and resumes
+       them on the first mousedown/touchstart/keydown.
+    c. **Native macOS never found OpenAL:** brew's openal-soft is keg-only,
+       so plain pkg-config misses it (CI macos too, despite installing it).
+       skyrocket's Makefile falls back to the /opt/homebrew//usr/local keg
+       path directly (with rpath). Linux (libopenal-dev) worked already.

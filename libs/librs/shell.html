@@ -155,6 +155,32 @@
     Module.setStatus('downloading');
     window.onerror = function () { Module.setStatus('exception — see console'); };
 
+    // Browser autoplay policy: an AudioContext created before the first user
+    // gesture starts 'suspended', and emscripten's OpenAL backend — unlike
+    // its SDL-audio path — never resumes it, so skyrocket would be
+    // permanently silent. Wrap the constructor to capture every context the
+    // wasm creates and resume them on the first gesture.
+    (function () {
+      var ctxs = window.__audioCtxs = [];
+      ['AudioContext', 'webkitAudioContext'].forEach(function (name) {
+        var Orig = window[name];
+        if (!Orig) return;
+        var Wrapped = function (opts) {
+          var ctx = new Orig(opts);
+          ctxs.push(ctx);
+          return ctx;
+        };
+        Wrapped.prototype = Orig.prototype;
+        window[name] = Wrapped;
+      });
+      function resumeAll() {
+        ctxs.forEach(function (c) { if (c.state === 'suspended') c.resume(); });
+      }
+      ['mousedown', 'touchstart', 'keydown'].forEach(function (t) {
+        document.addEventListener(t, resumeAll, true);
+      });
+    })();
+
     // gl4es tuning: prefer VBOs, batch immediate-mode geometry.
     Module.preRun = Module.preRun || [];
     Module.preRun.push(function () {
