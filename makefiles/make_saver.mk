@@ -19,7 +19,11 @@ EM_OBJS = $(patsubst %.cpp,$(WEB_DIR)/%.o,$(SRC))
 
 # Savers are built against the rsXScreenSaver code path, impersonated by librs
 SAVER_DEFS = -DRS_XSCREENSAVER
-SAVER_INC = $(LIBRS_INC) $(GL4ES_INC) $(GLUES_INC) $(RSMATH_INC) $(SHIM_INC)
+# SHIM_INC before RSMATH_INC: helios includes <rgbhsl/rgbhsl.h> (lowercase);
+# with rsmath first, case-insensitive filesystems resolve it to
+# Rgbhsl/Rgbhsl.h and clang warns (-Wnonportable-include-path). The shim is
+# the exact-case match on every platform.
+SAVER_INC = $(LIBRS_INC) $(GL4ES_INC) $(GLUES_INC) $(SHIM_INC) $(RSMATH_INC)
 
 all: native browser
 
