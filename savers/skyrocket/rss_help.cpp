@@ -20,3 +20,50 @@ const char* rss_saver_options =
     "  -earth           <0..1>\n"
     "  -illumination    <0..1>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dAmbient;
+extern int dClouds;
+extern int dEarth;
+extern int dExplosionsmoke;
+extern int dFlare;
+extern int dIllumination;
+extern int dMaxrockets;
+extern int dMoon;
+extern int dMoonglow;
+extern int dSmoke;
+extern int dSound;
+extern int dStardensity;
+extern int dWind;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "maxrockets", &dMaxrockets },
+    { "smoke", &dSmoke },
+    { "explosionsmoke", &dExplosionsmoke },
+    { "wind", &dWind },
+    { "ambient", &dAmbient },
+    { "stardensity", &dStardensity },
+    { "flare", &dFlare },
+    { "moonglow", &dMoonglow },
+    { "sound", &dSound },
+    { "moon", &dMoon },
+    { "clouds", &dClouds },
+    { "earth", &dEarth },
+    { "illumination", &dIllumination },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }

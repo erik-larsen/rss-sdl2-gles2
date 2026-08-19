@@ -16,3 +16,42 @@ const char* rss_saver_options =
     "  -usegoo      <0..1>\n"
     "  -shaders     <0..1>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dDepth;
+extern int dFov;
+extern int dResolution;
+extern int dShaders;
+extern int dSpeed;
+extern int dStarSize;
+extern int dStars;
+extern int dUseGoo;
+extern int dUseTunnels;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "speed", &dSpeed },
+    { "stars", &dStars },
+    { "starsize", &dStarSize },
+    { "resolution", &dResolution },
+    { "depth", &dDepth },
+    { "fov", &dFov },
+    { "usetunnels", &dUseTunnels },
+    { "usegoo", &dUseGoo },
+    { "shaders", &dShaders },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }

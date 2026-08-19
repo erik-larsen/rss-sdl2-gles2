@@ -504,3 +504,29 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
        so plain pkg-config misses it (CI macos too, despite installing it).
        skyrocket's Makefile falls back to the /opt/homebrew//usr/local keg
        path directly (with rpath). Linux (libopenal-dev) worked already.
+
+## Decisions log (live settings — no Apply)
+
+50. **Web settings apply instantly.** gen_help.py now also generates, into
+    each saver's rss_help.cpp, a name->address table of the option globals
+    plus two exported C functions: rss_set_option(name, value) pokes a value
+    into the running saver, and rss_restart() re-inits it in place
+    (cleanUp() + initSaver() — initSaver reads the d* globals, so the new
+    values take effect with no page reload). make_saver.mk exports both to
+    JS (-sEXPORTED_FUNCTIONS + ccall). The HUD: every slider input tick
+    live-writes the value (per-frame-read options like speed react during
+    the drag); 400ms after the last change one rss_restart rebuilds the
+    scene for init-time options. URL query stays in sync via replaceState
+    (shareable/reload-safe). Apply button removed; Defaults reloads clean.
+    Presets (-default) still reload the page — they map to a
+    handleCommandLine local and rewrite many defaults, so a reload is the
+    honest path. All option globals are int (lattice's BOOL is typedef int).
+
+    Notable sub-fixes: cyclone/fieldlines/lattice read some options through
+    a local temp ("int b; if(getArgumentsValue(...,b,0,1)>=0) dFog=b;") —
+    gen_help follows the assignment to the real global (a raw "extern int b"
+    broke those links). skyrocket's RS cleanUp() now nulls soundengine after
+    delete (restart with sound=0 would have used a dangling pointer).
+    Verified: all 12 optioned savers survive repeated in-place restarts with
+    changed options (flocks size visually confirmed, lattice texture swap
+    visually confirmed, skyrocket sound off->on cycles clean).

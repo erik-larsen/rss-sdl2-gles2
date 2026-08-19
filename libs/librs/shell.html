@@ -116,8 +116,9 @@
         return c;
       })(),
       // Per-saver options arrive as URL query params (?particles=100&size=20,
-      // set by the HUD's Apply) and are handed to the saver as real argv, so
-      // its unmodified handleCommandLine() parses them like the CLI would.
+      // kept in sync by the HUD's live controls) and are handed to the saver
+      // as real argv, so its unmodified handleCommandLine() parses them like
+      // the CLI would on a fresh load.
       arguments: (function () {
         var a = [];
         try {
@@ -273,6 +274,43 @@
         sect.className = 'sect'; sect.textContent = 'Options';
         box.appendChild(sect);
 
+        // Live apply: every change writes the option straight into the
+        // running saver (rss_set_option) and, shortly after the last change,
+        // re-inits it in place (rss_restart = cleanUp + initSaver) so
+        // init-time options (particle counts, geometry, textures) rebuild
+        // the scene — no page reload, no Apply button. The URL query is kept
+        // in sync (replaceState) so settings survive reload and are
+        // shareable. Presets are the exception: they rewrite many defaults
+        // inside handleCommandLine, so they apply via a reload.
+        var restartTimer = null;
+        function callWasm(fn, types, args) {
+          try {
+            if (window.Module && Module.ccall) return Module.ccall(fn, 'number', types, args);
+          } catch (e) {}
+          return -1;
+        }
+        function controlValue(c) {
+          return c.o.kind === 'bool' ? (c.input.checked ? 1 : 0) : Number(c.input.value);
+        }
+        function syncUrl() {
+          var p = new URLSearchParams();
+          controls.forEach(function (c) {
+            var v = controlValue(c);
+            if (v !== (c.o.default !== undefined ? c.o.default : NaN)) p.set(c.o.opt, v);
+          });
+          var q = p.toString();
+          history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+        }
+        function liveApply(c) {
+          syncUrl();
+          if (c.o.kind === 'preset') { location.reload(); return; }
+          callWasm('rss_set_option', ['string', 'number'], [c.o.opt, controlValue(c)]);
+          clearTimeout(restartTimer);
+          restartTimer = setTimeout(function () {
+            callWasm('rss_restart', [], []);
+          }, 400);
+        }
+
         meta.options.forEach(function (o) {
           var cur = params.has(o.opt) ? Number(params.get(o.opt))
                   : (o.default !== undefined ? o.default : (o.min !== undefined ? o.min : 0));
@@ -313,36 +351,20 @@
             row.appendChild(input);
           }
           box.appendChild(row);
-          controls.push({ o: o, input: input });
+          var c = { o: o, input: input };
+          controls.push(c);
+          input.addEventListener(o.kind === 'int' ? 'input' : 'change',
+                                 function () { liveApply(c); });
         });
 
         var btns = document.createElement('div'); btns.className = 'btns';
-        var apply = document.createElement('button');
-        apply.className = 'primary'; apply.textContent = 'Apply';
-        apply.addEventListener('click', function () {
-          var p = new URLSearchParams();
-          controls.forEach(function (c) {
-            var v = c.o.kind === 'bool' ? (c.input.checked ? 1 : 0) : Number(c.input.value);
-            if (v !== (c.o.default !== undefined ? c.o.default : NaN)) p.set(c.o.opt, v);
-          });
-          var q = p.toString();
-          if (q !== location.search.replace(/^\?/, '')) {
-            // replace() so settings states don't pile up in history —
-            // Esc (history.back) then leaves the saver, not the settings
-            location.replace(location.pathname + (q ? '?' + q : ''));
-          }
-        });
         var reset = document.createElement('button');
         reset.textContent = 'Defaults';
         reset.addEventListener('click', function () {
+          // replace() keeps history clean — Esc still leaves the saver
           if (location.search) location.replace(location.pathname);
-          else controls.forEach(function (c) {
-            var d = c.o.default !== undefined ? c.o.default : (c.o.min !== undefined ? c.o.min : 0);
-            if (c.o.kind === 'bool') c.input.checked = d >= 1;
-            else { c.input.value = d; c.input.dispatchEvent(new Event('input')); }
-          });
         });
-        btns.appendChild(apply); btns.appendChild(reset);
+        btns.appendChild(reset);
         box.appendChild(btns);
 
         // If the user customized settings, keep the panel open on load.

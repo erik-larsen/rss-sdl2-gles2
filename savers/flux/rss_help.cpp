@@ -20,3 +20,48 @@ const char* rss_saver_options =
     "  -instability  <1..100>\n"
     "  -blur         <0..100>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dBlur;
+extern int dComplexity;
+extern int dExpansion;
+extern int dFluxes;
+extern int dGeometry;
+extern int dInstability;
+extern int dParticles;
+extern int dRandomize;
+extern int dRotation;
+extern int dSize;
+extern int dTrail;
+extern int dWind;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "fluxes", &dFluxes },
+    { "particles", &dParticles },
+    { "trail", &dTrail },
+    { "geometry", &dGeometry },
+    { "size", &dSize },
+    { "complexity", &dComplexity },
+    { "randomize", &dRandomize },
+    { "expansion", &dExpansion },
+    { "rotation", &dRotation },
+    { "wind", &dWind },
+    { "instability", &dInstability },
+    { "blur", &dBlur },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }

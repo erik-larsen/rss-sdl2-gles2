@@ -43,6 +43,15 @@ def parse_options(cpp_path):
         if name in seen:
             continue
         seen.add(name)
+        # Some savers read into a local temp and assign to the real global:
+        #   int b;
+        #   if(getArgumentsValue(..., "-fog", b, 0, 1) >= 0) dFog = b;
+        # (cyclone, fieldlines, lattice). Follow the assignment so the
+        # runtime table points at the global, not a function local.
+        am = re.match(r'\s*>=\s*0\s*\)\s*([A-Za-z_]\w*)\s*=\s*' + re.escape(var) + r'\s*;',
+                      body[mo.end():mo.end() + 120])
+        if am:
+            var = am.group(1)
         opts.append((name, var, lo, hi))
     return opts
 
@@ -75,6 +84,41 @@ def parse_defaults(cpp_path):
 def c_escape(s):
     return s.replace('\\', '\\\\').replace('"', '\\"')
 
+def emit_runtime(opts):
+    """Live-option runtime for the web settings panel: a name->address table,
+    rss_set_option() to poke a value into the running saver, and
+    rss_restart() (cleanUp + initSaver) so init-time options rebuild the
+    scene in place. Preset options (-default) map to a handleCommandLine
+    local, not a global, so they are excluded — the panel reloads for those.
+    All option variables are int across the RSS savers."""
+    live = [(n, v) for n, v, lo, hi in opts
+            if not (re.match(r'DEFAULTS\d+', lo or '') and re.match(r'DEFAULTS\d+', hi or ''))]
+    body = '\n/* ---- live-option runtime (web settings panel; see shell.html) ---- */\n'
+    body += '#include <string.h>\n\n'
+    if not live:
+        body += ('extern "C" int rss_set_option(const char*, int) { return 0; }\n'
+                 'extern "C" void rss_restart(void) {}\n')
+        return body
+    for var in sorted({v for _n, v in live}):
+        body += 'extern int %s;\n' % var
+    body += '\nstatic struct { const char* name; int* addr; } rss_opt_addrs[] = {\n'
+    for name, var in live:
+        body += '    { "%s", &%s },\n' % (c_escape(name.lstrip('-')), var)
+    body += '};\n\n'
+    body += ('extern "C" int rss_set_option(const char* name, int value) {\n'
+             '    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {\n'
+             '        if (!strcmp(rss_opt_addrs[i].name, name)) {\n'
+             '            *rss_opt_addrs[i].addr = value;\n'
+             '            return 1;\n'
+             '        }\n'
+             '    }\n'
+             '    return 0;\n'
+             '}\n\n'
+             'extern void initSaver();\n'
+             'extern void cleanUp();\n'
+             'extern "C" void rss_restart(void) { cleanUp(); initSaver(); }\n')
+    return body
+
 def emit(saver, opts, out_path):
     lines = []
     if opts:
@@ -105,6 +149,7 @@ def emit(saver, opts, out_path):
         body += '    ;\n'
     else:
         body += 'const char* rss_saver_options = "";\n'
+    body += emit_runtime(opts)
     open(out_path, 'w').write(body)
     return len(opts)
 

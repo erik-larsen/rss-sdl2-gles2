@@ -14,3 +14,38 @@ const char* rss_saver_options =
     "  -stretch     <0..1>\n"
     "  -showcurves  <0..1>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dComplexity;
+extern int dCyclones;
+extern int dParticles;
+extern int dShowCurves;
+extern int dSize;
+extern int dSpeed;
+extern int dStretch;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "cyclones", &dCyclones },
+    { "particles", &dParticles },
+    { "size", &dSize },
+    { "complexity", &dComplexity },
+    { "speed", &dSpeed },
+    { "stretch", &dStretch },
+    { "showcurves", &dShowCurves },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }

@@ -19,3 +19,46 @@ const char* rss_saver_options =
     "  -smooth          <0..1>\n"
     "  -fog             <0..1>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dDensity;
+extern int dDepth;
+extern int dFog;
+extern int dFov;
+extern int dLatitude;
+extern int dLongitude;
+extern int dPathrand;
+extern int dSmooth;
+extern int dSpeed;
+extern int dTexture;
+extern int dThick;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "longitude", &dLongitude },
+    { "latitude", &dLatitude },
+    { "thickness", &dThick },
+    { "density", &dDensity },
+    { "depth", &dDepth },
+    { "fov", &dFov },
+    { "pathrandomness", &dPathrand },
+    { "speed", &dSpeed },
+    { "texture", &dTexture },
+    { "smooth", &dSmooth },
+    { "fog", &dFog },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }

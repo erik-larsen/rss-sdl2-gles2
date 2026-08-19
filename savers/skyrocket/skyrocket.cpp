@@ -1024,8 +1024,10 @@ void cleanup(HWND hwnd){
 #ifdef RS_XSCREENSAVER
 void cleanUp(){
 	particles.clear();
-	if(soundengine)
+	if(soundengine){
 		delete soundengine;
+		soundengine = NULL;  // initSaver may not recreate it (dSound==0)
+	}
 }
 
 void reshape(int width, int height){

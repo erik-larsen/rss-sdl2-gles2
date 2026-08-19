@@ -16,3 +16,42 @@ const char* rss_saver_options =
     "  -particlespeed  <1..100>\n"
     "  -blur           <1..100>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dBlur;
+extern int dEmitters;
+extern int dEmitterspeed;
+extern int dGeometry;
+extern int dParticles;
+extern int dParticlespeed;
+extern int dSize;
+extern int dWinds;
+extern int dWindspeed;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "winds", &dWinds },
+    { "emitters", &dEmitters },
+    { "perticles", &dParticles },
+    { "geometry", &dGeometry },
+    { "size", &dSize },
+    { "windspeed", &dWindspeed },
+    { "emitterspeed", &dEmitterspeed },
+    { "particlespeed", &dParticlespeed },
+    { "blur", &dBlur },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }

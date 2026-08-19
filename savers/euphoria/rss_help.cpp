@@ -18,3 +18,44 @@ const char* rss_saver_options =
     "  -wireframe      <0..1>\n"
     "  -texture        <0..4>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dBackground;
+extern int dDensity;
+extern int dFeedback;
+extern int dFeedbacksize;
+extern int dFeedbackspeed;
+extern int dSpeed;
+extern int dTexture;
+extern int dVisibility;
+extern int dWireframe;
+extern int dWisps;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "wisps", &dWisps },
+    { "background", &dBackground },
+    { "density", &dDensity },
+    { "visibility", &dVisibility },
+    { "speed", &dSpeed },
+    { "feedback", &dFeedback },
+    { "feedbackspeed", &dFeedbackspeed },
+    { "feedbacksize", &dFeedbacksize },
+    { "wireframe", &dWireframe },
+    { "texture", &dTexture },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }

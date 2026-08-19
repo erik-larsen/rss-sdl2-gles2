@@ -82,10 +82,16 @@ $(EM_OBJS): $(WEB_DIR)/%.o: $(SRC_DIR)/%.cpp $(HDRS) $(LIBRS_HDRS) | $(WEB_DIR)
 # Custom HTML shell (fullscreen black canvas) replacing emscripten's default
 EM_SHELL = --shell-file $(LIBRS_DIR)/shell.html
 
+# Live settings: the HUD pokes option values into the running saver and
+# re-inits it in place (rss_set_option / rss_restart, generated into each
+# saver's rss_help.cpp by gen_help.py).
+EM_EXPORTS = -sEXPORTED_FUNCTIONS=_main,_rss_set_option,_rss_restart \
+             -sEXPORTED_RUNTIME_METHODS=ccall
+
 $(EM_APP): $(EM_GL4ES_LIB) $(EM_GLUES_LIB) $(EM_RSMATH_LIB) $(EM_LIBRS_LIB) $(EM_OBJS)
 	$(MODERN_CODE_EMCXX) $(EM_OPT) $(EM_OBJS) \
 		$(EM_LIBRS_LIB) $(EM_RSMATH_LIB) $(EM_GLUES_LIB) $(EM_GL4ES_LIB) \
-		$(EM_SDL_LIBS) $(EM_ASYNCIFY) $(EM_MEMORY) $(EM_SHELL) $(EM_SAVER_EXTRA) -lm -o $@
+		$(EM_SDL_LIBS) $(EM_ASYNCIFY) $(EM_MEMORY) $(EM_EXPORTS) $(EM_SHELL) $(EM_SAVER_EXTRA) -lm -o $@
 	@echo
 	@echo BUILT: $@
 

@@ -6,3 +6,9 @@ extern const char* rss_saver_options;
 
 const char* rss_saver_name = "implicitdemo";
 const char* rss_saver_options = "";
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern "C" int rss_set_option(const char*, int) { return 0; }
+extern "C" void rss_restart(void) {}

@@ -17,3 +17,44 @@ const char* rss_saver_options =
     "  -shaders      <0..1>\n"
     "  -fog          <0..1>\n"
     ;
+
+/* ---- live-option runtime (web settings panel; see shell.html) ---- */
+#include <string.h>
+
+extern int dBackground;
+extern int dCameraSpeed;
+extern int dColorSpeed;
+extern int dDepth;
+extern int dFog;
+extern int dGizmoSpeed;
+extern int dKaleidoscopeTime;
+extern int dResolution;
+extern int dShaders;
+extern int dSingleTime;
+
+static struct { const char* name; int* addr; } rss_opt_addrs[] = {
+    { "stime", &dSingleTime },
+    { "ktime", &dKaleidoscopeTime },
+    { "background", &dBackground },
+    { "resolution", &dResolution },
+    { "depth", &dDepth },
+    { "gizmospeed", &dGizmoSpeed },
+    { "colorspeed", &dColorSpeed },
+    { "cameraspeed", &dCameraSpeed },
+    { "shaders", &dShaders },
+    { "fog", &dFog },
+};
+
+extern "C" int rss_set_option(const char* name, int value) {
+    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
+        if (!strcmp(rss_opt_addrs[i].name, name)) {
+            *rss_opt_addrs[i].addr = value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+extern void initSaver();
+extern void cleanUp();
+extern "C" void rss_restart(void) { cleanUp(); initSaver(); }
