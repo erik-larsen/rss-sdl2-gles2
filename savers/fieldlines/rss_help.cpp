@@ -26,20 +26,21 @@ extern int dSpeed;
 extern int dStepSize;
 extern int dWidth;
 
-static struct { const char* name; int* addr; } rss_opt_addrs[] = {
-    { "ions", &dIons },
-    { "stepsize", &dStepSize },
-    { "maxsteps", &dMaxSteps },
-    { "width", &dWidth },
-    { "speed", &dSpeed },
-    { "constwidth", &dConstwidth },
-    { "electric", &dElectric },
+static struct { const char* name; int* addr; int staged; int dirty; } rss_opts[] = {
+    { "ions", &dIons, 0, 0 },
+    { "stepsize", &dStepSize, 0, 0 },
+    { "maxsteps", &dMaxSteps, 0, 0 },
+    { "width", &dWidth, 0, 0 },
+    { "speed", &dSpeed, 0, 0 },
+    { "constwidth", &dConstwidth, 0, 0 },
+    { "electric", &dElectric, 0, 0 },
 };
 
 extern "C" int rss_set_option(const char* name, int value) {
-    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
-        if (!strcmp(rss_opt_addrs[i].name, name)) {
-            *rss_opt_addrs[i].addr = value;
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (!strcmp(rss_opts[i].name, name)) {
+            rss_opts[i].staged = value;
+            rss_opts[i].dirty = 1;
             return 1;
         }
     }
@@ -48,4 +49,13 @@ extern "C" int rss_set_option(const char* name, int value) {
 
 extern void initSaver();
 extern void cleanUp();
-extern "C" void rss_restart(void) { cleanUp(); initSaver(); }
+extern "C" void rss_restart(void) {
+    cleanUp();  // frees using the OLD option values
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (rss_opts[i].dirty) {
+            *rss_opts[i].addr = rss_opts[i].staged;
+            rss_opts[i].dirty = 0;
+        }
+    }
+    initSaver();  // allocates using the NEW option values
+}

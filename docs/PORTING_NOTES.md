@@ -522,15 +522,27 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     handleCommandLine local and rewrite many defaults, so a reload is the
     honest path. All option globals are int (lattice's BOOL is typedef int).
 
-    IMPORTANT (fix after first release): the writes and the restart happen
-    together in ONE synchronous JS block, 250ms after the last change —
-    never eagerly per slider tick. The original eager write let frames draw
-    between write and restart with a NEW count over arrays sized for the
-    OLD one; solarwinds' draw loops directly over dWinds, so a mid-drag
-    write walked past the winds array into garbage objects with unbounded
-    particle counts and froze the page. Staged-atomic apply removes that
-    hazard class for every saver (at the cost of per-frame options like
-    speed no longer reacting during the drag itself).
+    IMPORTANT (two hazards found after first release, both fixed by staging):
+    a. Writing a global while frames run: solarwinds' draw loops directly
+       over dWinds, so an eager per-slider-tick write let frames iterate a
+       NEW count over arrays allocated with the OLD one — page froze
+       (garbage wind objects -> unbounded particle loops).
+    b. Writing a global before cleanUp(): several savers' FREE paths also
+       iterate the option globals (solarwinds' wind::~wind loops
+       dParticles/dEmitters/dGeometry), so write-then-restart freed with
+       the new count -> heap corruption -> blank scene.
+    Final design: rss_set_option only STAGES values (C-side, in the
+    generated table); rss_restart applies them between cleanUp() (frees
+    with OLD values) and initSaver() (allocates with NEW values) — the only
+    safe window. The JS side debounces one rss_restart 250ms after the last
+    change. Live globals are never touched outside that window.
+
+    Related polish: solarwinds' upstream "-perticles" typo — the RS path now
+    reads "-particles" first with "-perticles" kept as a CLI alias (the UI
+    and URL use the correct spelling; gen_help's alias dedupe keeps the
+    first name). The HUD reopen button is a gear (settings), not "?" (help),
+    and the auto-hide countdown resets on any panel interaction — the panel
+    fades only after 4s of idle, never mid-manipulation.
 
     Notable sub-fixes: cyclone/fieldlines/lattice read some options through
     a local temp ("int b; if(getArgumentsValue(...,b,0,1)>=0) dFog=b;") —

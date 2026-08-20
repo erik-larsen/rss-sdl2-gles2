@@ -462,7 +462,8 @@ void handleCommandLine(int argc, char* argv[]){
 	setDefaults(DEFAULTS1);
 	getArgumentsValue(argc, argv, std::string("-winds"), dWinds, 1, 10);
 	getArgumentsValue(argc, argv, std::string("-emitters"), dEmitters, 1, 1000);
-	getArgumentsValue(argc, argv, std::string("-perticles"), dParticles, 1, 10000);
+	getArgumentsValue(argc, argv, std::string("-particles"), dParticles, 1, 10000);
+	getArgumentsValue(argc, argv, std::string("-perticles"), dParticles, 1, 10000);  // upstream spelling, kept as alias
 	getArgumentsValue(argc, argv, std::string("-geometry"), dGeometry, 0, 2);
 	getArgumentsValue(argc, argv, std::string("-size"), dSize, 1, 100);
 	getArgumentsValue(argc, argv, std::string("-windspeed"), dWindspeed, 1, 100);

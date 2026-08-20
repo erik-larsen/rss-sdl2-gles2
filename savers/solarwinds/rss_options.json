@@ -16,7 +16,7 @@
    "default": 30
   },
   {
-   "opt": "perticles",
+   "opt": "particles",
    "min": 1,
    "max": 10000,
    "kind": "int",

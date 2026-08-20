@@ -32,23 +32,24 @@ extern int dResolution;
 extern int dShaders;
 extern int dSingleTime;
 
-static struct { const char* name; int* addr; } rss_opt_addrs[] = {
-    { "stime", &dSingleTime },
-    { "ktime", &dKaleidoscopeTime },
-    { "background", &dBackground },
-    { "resolution", &dResolution },
-    { "depth", &dDepth },
-    { "gizmospeed", &dGizmoSpeed },
-    { "colorspeed", &dColorSpeed },
-    { "cameraspeed", &dCameraSpeed },
-    { "shaders", &dShaders },
-    { "fog", &dFog },
+static struct { const char* name; int* addr; int staged; int dirty; } rss_opts[] = {
+    { "stime", &dSingleTime, 0, 0 },
+    { "ktime", &dKaleidoscopeTime, 0, 0 },
+    { "background", &dBackground, 0, 0 },
+    { "resolution", &dResolution, 0, 0 },
+    { "depth", &dDepth, 0, 0 },
+    { "gizmospeed", &dGizmoSpeed, 0, 0 },
+    { "colorspeed", &dColorSpeed, 0, 0 },
+    { "cameraspeed", &dCameraSpeed, 0, 0 },
+    { "shaders", &dShaders, 0, 0 },
+    { "fog", &dFog, 0, 0 },
 };
 
 extern "C" int rss_set_option(const char* name, int value) {
-    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
-        if (!strcmp(rss_opt_addrs[i].name, name)) {
-            *rss_opt_addrs[i].addr = value;
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (!strcmp(rss_opts[i].name, name)) {
+            rss_opts[i].staged = value;
+            rss_opts[i].dirty = 1;
             return 1;
         }
     }
@@ -57,4 +58,13 @@ extern "C" int rss_set_option(const char* name, int value) {
 
 extern void initSaver();
 extern void cleanUp();
-extern "C" void rss_restart(void) { cleanUp(); initSaver(); }
+extern "C" void rss_restart(void) {
+    cleanUp();  // frees using the OLD option values
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (rss_opts[i].dirty) {
+            *rss_opts[i].addr = rss_opts[i].staged;
+            rss_opts[i].dirty = 0;
+        }
+    }
+    initSaver();  // allocates using the NEW option values
+}

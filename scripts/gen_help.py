@@ -101,14 +101,20 @@ def emit_runtime(opts):
         return body
     for var in sorted({v for _n, v in live}):
         body += 'extern int %s;\n' % var
-    body += '\nstatic struct { const char* name; int* addr; } rss_opt_addrs[] = {\n'
+    body += '\nstatic struct { const char* name; int* addr; int staged; int dirty; } rss_opts[] = {\n'
     for name, var in live:
-        body += '    { "%s", &%s },\n' % (c_escape(name.lstrip('-')), var)
+        body += '    { "%s", &%s, 0, 0 },\n' % (c_escape(name.lstrip('-')), var)
     body += '};\n\n'
+    # Values are STAGED here and only written into the real globals inside
+    # rss_restart, between cleanUp() and initSaver(). Several savers' free
+    # paths iterate over the option globals (solarwinds' wind::~wind loops
+    # dParticles/dEmitters); writing a new count before cleanUp() makes it
+    # free with the new count over arrays allocated with the old one.
     body += ('extern "C" int rss_set_option(const char* name, int value) {\n'
-             '    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {\n'
-             '        if (!strcmp(rss_opt_addrs[i].name, name)) {\n'
-             '            *rss_opt_addrs[i].addr = value;\n'
+             '    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {\n'
+             '        if (!strcmp(rss_opts[i].name, name)) {\n'
+             '            rss_opts[i].staged = value;\n'
+             '            rss_opts[i].dirty = 1;\n'
              '            return 1;\n'
              '        }\n'
              '    }\n'
@@ -116,7 +122,16 @@ def emit_runtime(opts):
              '}\n\n'
              'extern void initSaver();\n'
              'extern void cleanUp();\n'
-             'extern "C" void rss_restart(void) { cleanUp(); initSaver(); }\n')
+             'extern "C" void rss_restart(void) {\n'
+             '    cleanUp();  // frees using the OLD option values\n'
+             '    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {\n'
+             '        if (rss_opts[i].dirty) {\n'
+             '            *rss_opts[i].addr = rss_opts[i].staged;\n'
+             '            rss_opts[i].dirty = 0;\n'
+             '        }\n'
+             '    }\n'
+             '    initSaver();  // allocates using the NEW option values\n'
+             '}\n')
     return body
 
 def emit(saver, opts, out_path):

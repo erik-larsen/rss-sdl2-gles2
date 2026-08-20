@@ -37,25 +37,26 @@ extern int dSize;
 extern int dTrail;
 extern int dWind;
 
-static struct { const char* name; int* addr; } rss_opt_addrs[] = {
-    { "fluxes", &dFluxes },
-    { "particles", &dParticles },
-    { "trail", &dTrail },
-    { "geometry", &dGeometry },
-    { "size", &dSize },
-    { "complexity", &dComplexity },
-    { "randomize", &dRandomize },
-    { "expansion", &dExpansion },
-    { "rotation", &dRotation },
-    { "wind", &dWind },
-    { "instability", &dInstability },
-    { "blur", &dBlur },
+static struct { const char* name; int* addr; int staged; int dirty; } rss_opts[] = {
+    { "fluxes", &dFluxes, 0, 0 },
+    { "particles", &dParticles, 0, 0 },
+    { "trail", &dTrail, 0, 0 },
+    { "geometry", &dGeometry, 0, 0 },
+    { "size", &dSize, 0, 0 },
+    { "complexity", &dComplexity, 0, 0 },
+    { "randomize", &dRandomize, 0, 0 },
+    { "expansion", &dExpansion, 0, 0 },
+    { "rotation", &dRotation, 0, 0 },
+    { "wind", &dWind, 0, 0 },
+    { "instability", &dInstability, 0, 0 },
+    { "blur", &dBlur, 0, 0 },
 };
 
 extern "C" int rss_set_option(const char* name, int value) {
-    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
-        if (!strcmp(rss_opt_addrs[i].name, name)) {
-            *rss_opt_addrs[i].addr = value;
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (!strcmp(rss_opts[i].name, name)) {
+            rss_opts[i].staged = value;
+            rss_opts[i].dirty = 1;
             return 1;
         }
     }
@@ -64,4 +65,13 @@ extern "C" int rss_set_option(const char* name, int value) {
 
 extern void initSaver();
 extern void cleanUp();
-extern "C" void rss_restart(void) { cleanUp(); initSaver(); }
+extern "C" void rss_restart(void) {
+    cleanUp();  // frees using the OLD option values
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (rss_opts[i].dirty) {
+            *rss_opts[i].addr = rss_opts[i].staged;
+            rss_opts[i].dirty = 0;
+        }
+    }
+    initSaver();  // allocates using the NEW option values
+}

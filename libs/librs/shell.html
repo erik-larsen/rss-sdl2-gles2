@@ -100,7 +100,7 @@
     <div class="row"><span class="act">Back to gallery</span> <kbd>Esc</kbd></div>
     <div id="opts"></div>
   </div>
-  <div id="hudtoggle" title="Show controls (H)">?</div>
+  <div id="hudtoggle" title="Show controls (H)">&#9881;&#65038;</div>
 
   <script type="text/javascript">
     var statusEl = document.getElementById('status');
@@ -221,11 +221,18 @@
       // (the events still reach their targets) but SDL never sees them.
       // Native range-drag uses implicit pointer capture, so even drags that
       // wander off the panel keep targeting the input and are caught here.
+      // Any interaction with the panel (pointer activity, slider input,
+      // checkbox change) counts as "touched" and defers the auto-hide.
+      var lastTouch = 0;
+      function touched() { lastTouch = Date.now(); }
       ['pointerdown', 'pointermove', 'pointerup', 'mousedown', 'mousemove',
        'mouseup', 'touchstart', 'touchmove', 'touchend', 'wheel', 'click',
        'dblclick'].forEach(function (t) {
-        hud.addEventListener(t, function (e) { e.stopPropagation(); });
+        hud.addEventListener(t, function (e) { touched(); e.stopPropagation(); });
         toggle.addEventListener(t, function (e) { e.stopPropagation(); });
+      });
+      ['input', 'change'].forEach(function (t) {
+        hud.addEventListener(t, touched);
       });
 
       var visible = true;
@@ -234,8 +241,14 @@
 
       window.rssHud = {
         // Called ~4s after load: fade the panel down to just the "?" button,
-        // so the saver is unobstructed but the legend stays one keypress away.
-        autohide: function () { if (visible) hide(); }
+        // so the saver is unobstructed but the legend stays one keypress
+        // away. Manipulating a control resets the countdown — the panel only
+        // fades after 4s of idle, never mid-interaction.
+        autohide: function attemptHide() {
+          var idle = Date.now() - lastTouch;
+          if (idle < 4000) setTimeout(attemptHide, 4000 - idle);
+          else if (visible) hide();
+        }
       };
 
       // 'H' or '?' toggles the panel. Esc/Q leaves the saver page: back to

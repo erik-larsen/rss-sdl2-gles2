@@ -38,26 +38,27 @@ extern int dSound;
 extern int dStardensity;
 extern int dWind;
 
-static struct { const char* name; int* addr; } rss_opt_addrs[] = {
-    { "maxrockets", &dMaxrockets },
-    { "smoke", &dSmoke },
-    { "explosionsmoke", &dExplosionsmoke },
-    { "wind", &dWind },
-    { "ambient", &dAmbient },
-    { "stardensity", &dStardensity },
-    { "flare", &dFlare },
-    { "moonglow", &dMoonglow },
-    { "sound", &dSound },
-    { "moon", &dMoon },
-    { "clouds", &dClouds },
-    { "earth", &dEarth },
-    { "illumination", &dIllumination },
+static struct { const char* name; int* addr; int staged; int dirty; } rss_opts[] = {
+    { "maxrockets", &dMaxrockets, 0, 0 },
+    { "smoke", &dSmoke, 0, 0 },
+    { "explosionsmoke", &dExplosionsmoke, 0, 0 },
+    { "wind", &dWind, 0, 0 },
+    { "ambient", &dAmbient, 0, 0 },
+    { "stardensity", &dStardensity, 0, 0 },
+    { "flare", &dFlare, 0, 0 },
+    { "moonglow", &dMoonglow, 0, 0 },
+    { "sound", &dSound, 0, 0 },
+    { "moon", &dMoon, 0, 0 },
+    { "clouds", &dClouds, 0, 0 },
+    { "earth", &dEarth, 0, 0 },
+    { "illumination", &dIllumination, 0, 0 },
 };
 
 extern "C" int rss_set_option(const char* name, int value) {
-    for (unsigned i = 0; i < sizeof(rss_opt_addrs)/sizeof(rss_opt_addrs[0]); ++i) {
-        if (!strcmp(rss_opt_addrs[i].name, name)) {
-            *rss_opt_addrs[i].addr = value;
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (!strcmp(rss_opts[i].name, name)) {
+            rss_opts[i].staged = value;
+            rss_opts[i].dirty = 1;
             return 1;
         }
     }
@@ -66,4 +67,13 @@ extern "C" int rss_set_option(const char* name, int value) {
 
 extern void initSaver();
 extern void cleanUp();
-extern "C" void rss_restart(void) { cleanUp(); initSaver(); }
+extern "C" void rss_restart(void) {
+    cleanUp();  // frees using the OLD option values
+    for (unsigned i = 0; i < sizeof(rss_opts)/sizeof(rss_opts[0]); ++i) {
+        if (rss_opts[i].dirty) {
+            *rss_opts[i].addr = rss_opts[i].staged;
+            rss_opts[i].dirty = 0;
+        }
+    }
+    initSaver();  // allocates using the NEW option values
+}
