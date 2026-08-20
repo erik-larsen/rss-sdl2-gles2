@@ -304,11 +304,19 @@
         function liveApply(c) {
           syncUrl();
           if (c.o.kind === 'preset') { location.reload(); return; }
-          callWasm('rss_set_option', ['string', 'number'], [c.o.opt, controlValue(c)]);
+          // The writes and the restart happen together in ONE synchronous
+          // block, so no wasm frame can run between them. Poking a value
+          // eagerly on each slider tick let frames draw with a new count
+          // over arrays sized for the old one (solarwinds loops draw over
+          // dWinds directly — a mid-drag write froze the page).
           clearTimeout(restartTimer);
           restartTimer = setTimeout(function () {
+            controls.forEach(function (k) {
+              if (k.o.kind !== 'preset')
+                callWasm('rss_set_option', ['string', 'number'], [k.o.opt, controlValue(k)]);
+            });
             callWasm('rss_restart', [], []);
-          }, 400);
+          }, 250);
         }
 
         meta.options.forEach(function (o) {

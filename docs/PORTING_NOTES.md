@@ -522,6 +522,16 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     handleCommandLine local and rewrite many defaults, so a reload is the
     honest path. All option globals are int (lattice's BOOL is typedef int).
 
+    IMPORTANT (fix after first release): the writes and the restart happen
+    together in ONE synchronous JS block, 250ms after the last change —
+    never eagerly per slider tick. The original eager write let frames draw
+    between write and restart with a NEW count over arrays sized for the
+    OLD one; solarwinds' draw loops directly over dWinds, so a mid-drag
+    write walked past the winds array into garbage objects with unbounded
+    particle counts and froze the page. Staged-atomic apply removes that
+    hazard class for every saver (at the cost of per-frame options like
+    speed no longer reacting during the drag itself).
+
     Notable sub-fixes: cyclone/fieldlines/lattice read some options through
     a local temp ("int b; if(getArgumentsValue(...,b,0,1)>=0) dFog=b;") —
     gen_help follows the assignment to the real global (a raw "extern int b"
