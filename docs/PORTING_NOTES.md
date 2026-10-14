@@ -552,3 +552,19 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     Verified: all 12 optioned savers survive repeated in-place restarts with
     changed options (flocks size visually confirmed, lattice texture swap
     visually confirmed, skyrocket sound off->on cycles clean).
+
+## Decisions log (web: plasma blank on iOS Safari)
+
+51. **plasma drew black on iOS Safari (every other saver fine): float
+    texture + GL_LINEAR without OES_texture_float_linear.** plasma is the
+    only saver that uploads GL_FLOAT texels (GL_RGB/GL_FLOAT, re-uploaded
+    every frame via glTexSubImage2D, sampled GL_LINEAR). WebGL there
+    exposes OES_texture_float, so gl4es kept the texture float — but iOS
+    Safari lacks OES_texture_float_linear, making a linearly-filtered float
+    texture incomplete (samples black). Desktop browsers have the linear
+    extension, which is why it only showed on iOS. Fix: the web shell sets
+    LIBGL_FLOAT=0 before initialize_gl4es() (setenv overwrite=0, same
+    pattern as ANGLE_DEFAULT_PLATFORM); gl4es then converts the floats to
+    GL_UNSIGNED_BYTE on upload (plasma clamps to [0,1], so no loss). Saver
+    source unchanged; native unaffected. Verified the byte path renders
+    plasma correctly (native, LIBGL_FLOAT=0 under Xvfb).

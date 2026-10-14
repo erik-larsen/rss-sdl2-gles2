@@ -258,6 +258,12 @@ int main(int argc, char* argv[])
     // Metal backend: flux 6 fps -> 60 fps. setenv(…, 0) keeps it overridable.
     setenv("ANGLE_DEFAULT_PLATFORM", "metal", 0);
 #endif
+#else
+    // Keep gl4es off float textures in the browser: plasma's GL_RGB/GL_FLOAT
+    // texture is sampled GL_LINEAR, which needs OES_texture_float_linear --
+    // absent on iOS Safari, so the texture is incomplete and draws black.
+    // With LIBGL_FLOAT=0 gl4es converts the floats to GL_UNSIGNED_BYTE.
+    setenv("LIBGL_FLOAT", "0", 0);
 #endif
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
