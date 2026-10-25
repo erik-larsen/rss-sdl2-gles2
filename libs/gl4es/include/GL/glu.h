@@ -52,10 +52,10 @@
 #if (defined(_MSC_VER) || defined(__MINGW32__)) && defined(BUILD_GLU32)
 # undef GLAPI
 # define GLAPI __declspec(dllexport)
-#elif (defined(_MSC_VER) || defined(__MINGW32__)) && defined(_DLL)
-/* tag specifying we're building for DLL runtime support */
-# undef GLAPI
-# define GLAPI __declspec(dllimport)
+/* rss-port: no _DLL -> dllimport branch. GLU here is glues, a static lib.
+ * MinGW's CRT headers define _DLL, and GL/gl.h pulls in <windows.h> only
+ * after choosing GLAPI, so that branch turned every glu* prototype into an
+ * __imp_ reference that nothing provides. */
 #elif !defined(GLAPI)
 /* for use with static link lib build of Win32 edition only */
 # define GLAPI extern

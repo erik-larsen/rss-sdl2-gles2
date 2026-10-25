@@ -13,6 +13,12 @@ else ifneq ($(findstring MINGW64_NT,$(OS)),)
 	OS = win
 	DYL_EXT = dll
 	CONSOLE_FLAGS = -mconsole
+	# Hide WIN32 (the original Win32 saver shell) so Windows builds the same
+	# SDL path as Linux/macOS -- see include/shim/rss_mingw.h for why this
+	# has to be a forced include rather than -UWIN32.
+	PLATFORM_DEFS = -include $(INCS_DIR)/shim/rss_mingw.h
+	# rsTimer: timeBeginPeriod/timeGetTime
+	PLATFORM_LIBS = -lwinmm
 endif
 
 # Source and output dirs (relative to a saver/lib dir, two levels deep)
@@ -109,8 +115,8 @@ EXTRA_DEBUG =
 EM_EXTRA_DEBUG = -s ASSERTIONS=2 -s SAFE_HEAP=1 -s STACK_OVERFLOW_CHECK=2
 
 # Base compilers
-CC = cc $(EXTRA_DEBUG)
-CXX = c++ $(EXTRA_DEBUG)
+CC = cc $(PLATFORM_DEFS) $(EXTRA_DEBUG)
+CXX = c++ $(PLATFORM_DEFS) $(EXTRA_DEBUG)
 EMCC = emcc -s WASM=1
 EMCXX = em++ -s WASM=1
 

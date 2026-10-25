@@ -40,8 +40,9 @@
    #endif
 #elif defined (__QNXNTO__)
    #include <GL/gl.h>
-#elif defined(_WIN32) && (defined(_M_IX86) || defined(_M_X64))
-   /* mainly for PowerVR OpenGL ES 1.x win32 emulator */
+#elif defined(_WIN32) && !defined(__MINGW32__) && (defined(_M_IX86) || defined(_M_X64))
+   /* mainly for PowerVR OpenGL ES 1.x win32 emulator. rss-port: not MinGW,
+    * whose _mingw.h defines _M_X64; MinGW takes the gl4es path below. */
    #include <GL\gl.h>
    #undef APIENTRY
    #define APIENTRY

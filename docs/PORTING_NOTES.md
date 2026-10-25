@@ -552,3 +552,21 @@ not run in the dev sandbox. Remaining optional work: OS screensaver packaging
     Verified: all 12 optioned savers survive repeated in-place restarts with
     changed options (flocks size visually confirmed, lattice texture swap
     visually confirmed, skyrocket sound off->on cycles clean).
+51. **Windows (MSYS2 MinGW) builds again.** It had failed since CI came
+    back, on three separate MinGW behaviours:
+    - WIN32 is predefined, so every saver compiled its original Win32 shell
+      (rsWin32Saver.h, registry, dialogs, wgl). Worse, MinGW's
+      <minwindef.h> re-defines WIN32 on every <windows.h> include, so
+      -UWIN32 does not stick. include/shim/rss_mingw.h is force-included
+      (-include, win block of platform.mk): it includes <windows.h> first
+      (lean, NOMINMAX) and then #undefs WIN32, so Windows takes the same
+      SDL path as Linux/macOS. Genuinely Windows-specific code keys on
+      _WIN32: rsTimer's QueryPerformanceCounter/timeBeginPeriod path
+      (links -lwinmm) and impShape's _aligned_malloc; skyrocket's HWND
+      stand-in typedef likewise.
+    - _mingw.h defines _DLL, which gl4es's GL/gl.h and GL/glu.h read as
+      "import from opengl32/glu32 DLLs" and turn into __declspec(dllimport)
+      -- __imp_gl*/__imp_glu* references nothing provides, since gl4es and
+      glues are static. Both branches are removed (rss-port comments).
+    - _mingw.h also defines _M_X64, which flipped glues' headers into their
+      PowerVR-emulator dllimport branch; that branch now excludes MinGW.

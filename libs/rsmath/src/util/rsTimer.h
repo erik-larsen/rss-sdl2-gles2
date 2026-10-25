@@ -23,7 +23,7 @@
 #define RS_TIMER_H
 
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <windows.h>
 #include <mmsystem.h>
 #else
@@ -41,7 +41,7 @@ public:
 	// Wait() would take a hair too long, if we didn't keep track of the
 	// extra time it was spending.  That's what wait_overhead is for.
 	double wait_function_overhead;
-#ifdef WIN32
+#ifdef _WIN32
 	BOOL highResCounterSupported;
 	double freq;  // high frequency system counts per second
 	LONGLONG curr, prev;
@@ -56,7 +56,7 @@ public:
 		elapsed_time = 0.0;
 		waited_time = 0.0;
 		wait_function_overhead = 0.0;
-#ifdef WIN32
+#ifdef _WIN32
 		// init high- and low-res timers
 		LARGE_INTEGER n[1];
 		highResCounterSupported = QueryPerformanceFrequency(n);
@@ -75,7 +75,7 @@ public:
 
 	// return time elapsed since last call to tick()
 	inline double tick(){
-#ifdef WIN32
+#ifdef _WIN32
 		if(highResCounterSupported){
 			prev = curr;
 			LARGE_INTEGER n[1];
@@ -114,7 +114,7 @@ public:
 		waited_time = tick();
 		const double actual_waited_time(waited_time + wait_function_overhead);
 		if(actual_waited_time < target_time){
-#if WIN32
+#ifdef _WIN32
 			Sleep(long(1000.0 * (target_time - actual_waited_time)));
 #else
 			usleep(long(1000000.0 * (target_time - actual_waited_time)));

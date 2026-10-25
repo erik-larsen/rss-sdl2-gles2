@@ -87,7 +87,7 @@ public:
 #ifdef __SSE__
 	void* operator new(size_t size)
 	{
-#ifdef WIN32
+#ifdef _WIN32
 		return _aligned_malloc(size, 16);
 #else
 		return memalign(16, size);
@@ -95,7 +95,7 @@ public:
 	}
 	void operator delete (void* mem)
 	{
-#ifdef WIN32
+#ifdef _WIN32
 		_aligned_free(mem);
 #else
 		free(mem);

@@ -60,8 +60,9 @@
 #if !defined(OPENSTEP) && (defined(__WIN32__) && !defined(__CYGWIN__))
 #  if (defined(_MSC_VER) || defined(__MINGW32__)) && defined(BUILD_GL32) /* tag specify we're building mesa as a DLL */
 #    define GLAPI __declspec(dllexport)
-#  elif (defined(_MSC_VER) || defined(__MINGW32__)) && defined(_DLL) /* tag specifying we're building for DLL runtime support */
-#    define GLAPI __declspec(dllimport)
+/* rss-port: no _DLL -> dllimport branch; gl4es is linked statically
+ * (libGL-native.a). MinGW's CRT headers define _DLL, so any file that
+ * included <windows.h> first got __imp_gl* references nothing provides. */
 #  else /* for use with static link lib build of Win32 edition only */
 #    define GLAPI extern
 #  endif /* _STATIC_MESA support */

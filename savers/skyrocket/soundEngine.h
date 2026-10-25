@@ -44,7 +44,7 @@
 #endif
 
 // Window handle type used by the ctor (HWND on Win32, unused elsewhere)
-#ifndef WIN32
+#ifndef _WIN32
 typedef void* HWND;
 #endif
 
